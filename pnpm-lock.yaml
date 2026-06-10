@@ -63,6 +63,9 @@ importers:
 
   apps/web:
     dependencies:
+      '@profound-takehome/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
       '@radix-ui/react-slot':
         specifier: ^1.2.0
         version: 1.2.5(@types/react@19.2.17)(react@19.2.7)

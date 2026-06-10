@@ -1,22 +1,8 @@
-export type PageRow = {
-  url: string;
-  title: string | null;
-  description: string | null;
-  h1: string | null;
-  sectionHint: string | null;
-};
-
-export type SectionInventory = {
-  name: string;
-  pages: PageRow[];
-};
-
-export type Inventory = {
-  siteName: string;
-  homepageSnippet: string | null;
-  sections: SectionInventory[];
-  optional: PageRow[];
-};
+export type {
+  InventoryPage,
+  SectionInventory,
+  Inventory,
+} from "@profound-takehome/shared";
 
 const RULES: Array<{ rx: RegExp; section: string; optional?: boolean }> = [
   { rx: /^\/(docs|documentation|guide|guides|api|reference)/i, section: "Documentation" },

@@ -6,11 +6,9 @@
 // Threshold: structural change OR ≥1 metadata change → regenerate.
 // Pure body-text drift with identical metadata → record, don't regenerate.
 
-export type ChangeSet = {
-  added: string[];
-  removed: string[];
-  modified: string[];
-};
+import type { ChangeSet } from "@profound-takehome/shared";
+
+export type { ChangeSet };
 
 export const EMPTY_CHANGESET: ChangeSet = { added: [], removed: [], modified: [] };
 
