@@ -1,0 +1,15 @@
+.DS_Store
+.env
+.env.*
+!.env.example
+.next/
+node_modules/
+dist/
+build/
+coverage/
+.turbo/
+.venv/
+__pycache__/
+.pytest_cache/
+playwright-report/
+test-results/

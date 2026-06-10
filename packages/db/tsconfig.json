@@ -1,0 +1,4 @@
+{
+  "extends": "@profound-takehome/config/tsconfig/base",
+  "include": ["src/**/*.ts"]
+}
