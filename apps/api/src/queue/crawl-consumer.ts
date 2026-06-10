@@ -254,7 +254,8 @@ async function handleGenerate(
   const db = drizzle(env.DB);
   const stub = coordinator(env, msg.siteId);
   try {
-    await generate(env, msg.siteId, msg.runId);
+    const run = await db.select().from(crawlRuns).where(eq(crawlRuns.id, msg.runId)).get();
+    await generate(env, msg.siteId, msg.runId, run?.changeSummary ?? undefined);
     await doCall(stub, "/finish", { runId: msg.runId, phase: "done" });
   } catch (err) {
     await db

@@ -2,6 +2,7 @@ import { nanoid } from "nanoid";
 import { drizzle } from "drizzle-orm/d1";
 import { and, eq, inArray } from "drizzle-orm";
 import { sites, pages, crawlRuns } from "@profound-takehome/db";
+import { summarizeChanges } from "@profound-takehome/shared";
 import type { Env, MonitorMessage } from "../bindings";
 import { politeFetch } from "../crawler/fetcher";
 import {
@@ -105,6 +106,7 @@ async function checkSite(env: Env, siteId: string): Promise<void> {
       trigger: "monitor",
       status: "queued",
       pagesChanged: changes.added.length + changes.removed.length + changes.modified.length,
+      changeSummary: summarizeChanges(changes),
       startedAt: now,
     });
     // One discover message; the crawl pipeline re-crawls the site and

@@ -56,6 +56,7 @@ export const crawlRuns = sqliteTable(
     pagesFound: integer("pages_found").notNull().default(0),
     pagesCrawled: integer("pages_crawled").notNull().default(0),
     pagesChanged: integer("pages_changed").notNull().default(0),
+    changeSummary: text("change_summary"),
     discoveryMethod: text("discovery_method"),
     error: text("error"),
     startedAt: integer("started_at"),
