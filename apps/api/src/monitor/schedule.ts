@@ -24,16 +24,48 @@ export async function enqueueDueMonitorJobs(env: Env): Promise<void> {
   );
 }
 
+const HOUR = 3600;
+const WEEK = 7 * 24 * HOUR;
+
 /**
  * Adaptive cadence math — pure, easy to unit test.
  * - changes found → halve interval (floor 1h)
  * - no changes    → 1.5× interval (ceiling 7d)
  */
 export function nextInterval(currentS: number, changesFound: boolean): number {
-  const HOUR = 3600;
-  const WEEK = 7 * 24 * HOUR;
   if (changesFound) return Math.max(Math.floor(currentS / 2), HOUR);
   return Math.min(Math.floor(currentS * 1.5), WEEK);
+}
+
+export type CadenceSignals = {
+  hasNewsSitemap?: boolean;
+  hasRss?: boolean;
+  hasDatedUrls?: boolean;
+  pageCount?: number;
+};
+
+/**
+ * Prior for a site's first check interval, before adaptive feedback exists.
+ * Strongest freshness signal wins:
+ * - news sitemap or RSS feed → 6h (publishes often)
+ * - dated URLs (blog-heavy)  → 12h
+ * - tiny static site         → 72h (rarely changes)
+ * - default                  → 24h
+ */
+export function initialInterval(signals: CadenceSignals): number {
+  if (signals.hasNewsSitemap || signals.hasRss) return 6 * HOUR;
+  if (signals.hasDatedUrls) return 12 * HOUR;
+  if (signals.pageCount !== undefined && signals.pageCount <= 15) return 72 * HOUR;
+  return 24 * HOUR;
+}
+
+/**
+ * Streak bookkeeping: positive = consecutive checks that found changes,
+ * negative = consecutive quiet checks. Sign flips reset the counter.
+ */
+export function nextStreak(current: number, changesFound: boolean): number {
+  if (changesFound) return current > 0 ? current + 1 : 1;
+  return current < 0 ? current - 1 : -1;
 }
 
 // Hint for tsc that `sql` is intentionally available for raw queries later.
