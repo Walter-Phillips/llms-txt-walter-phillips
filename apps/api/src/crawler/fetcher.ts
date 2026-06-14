@@ -1,3 +1,5 @@
+import { isBlockedHost } from "../lib/url";
+
 const UA = "llms-txt-generator/1.0 (+https://llms-txt.example.com/about)";
 
 const TIMEOUT_MS = 10_000;
@@ -25,6 +27,14 @@ export async function politeFetch(
     redirect: "follow",
     signal: AbortSignal.timeout(TIMEOUT_MS),
   });
+
+  if (res.url) {
+    const finalHost = new URL(res.url).hostname;
+    if (isBlockedHost(finalHost)) {
+      await res.body?.cancel();
+      throw new Error(`blocked redirect to internal host: ${finalHost}`);
+    }
+  }
 
   const declaredLength = Number.parseInt(res.headers.get("content-length") ?? "", 10);
   const maxBodyBytes = opts.maxBodyBytes ?? MAX_BODY_BYTES;

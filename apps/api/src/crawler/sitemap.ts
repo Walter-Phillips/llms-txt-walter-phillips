@@ -1,4 +1,5 @@
 import { politeFetch, readBodyText } from "./fetcher";
+import { urlPathDepth } from "../lib/url";
 
 export type SitemapEntry = { url: string; lastmod?: string };
 
@@ -116,15 +117,13 @@ export function parseSitemapDocument(text: string): ParsedSitemap {
 
 /** Shallower paths first; ties broken by URL length, then lexicographically. */
 export function prioritizeShallow(entries: SitemapEntry[], cap = MAX_SITEMAP_URLS): SitemapEntry[] {
-  const depth = (u: string): number => {
-    try {
-      return new URL(u).pathname.split("/").filter(Boolean).length;
-    } catch {
-      return Number.MAX_SAFE_INTEGER;
-    }
-  };
   return [...entries]
-    .sort((a, b) => depth(a.url) - depth(b.url) || a.url.length - b.url.length || (a.url < b.url ? -1 : 1))
+    .sort(
+      (a, b) =>
+        urlPathDepth(a.url) - urlPathDepth(b.url) ||
+        a.url.length - b.url.length ||
+        (a.url < b.url ? -1 : 1),
+    )
     .slice(0, cap);
 }
 

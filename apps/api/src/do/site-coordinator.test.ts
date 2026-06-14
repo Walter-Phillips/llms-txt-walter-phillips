@@ -1,0 +1,268 @@
+import { describe, expect, it, vi } from "vitest";
+import { MAX_DEPTH, MAX_PAGES } from "../crawler/frontier";
+
+vi.mock(
+  "cloudflare:workers",
+  () => ({
+    DurableObject: class {
+      protected ctx: DurableObjectState;
+
+      constructor(ctx: DurableObjectState) {
+        this.ctx = ctx;
+      }
+    },
+  }),
+);
+
+const { SiteCoordinator } = await import("./site-coordinator");
+type Coordinator = InstanceType<typeof SiteCoordinator>;
+
+function fakeStorage() {
+  const map = new Map<string, unknown>();
+  return {
+    get: async (key: string) => map.get(key),
+    put: async (key: string, value: unknown) => void map.set(key, value),
+  };
+}
+
+function fakeCtx() {
+  return { storage: fakeStorage() } as unknown as DurableObjectState;
+}
+
+function coordinator(): Coordinator {
+  return new SiteCoordinator(fakeCtx(), {} as never);
+}
+
+async function post<T>(co: Coordinator, path: string, body: unknown): Promise<{ status: number; body: T }> {
+  const res = await co.fetch(
+    new Request(`https://do${path}`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  );
+  return { status: res.status, body: (await res.json()) as T };
+}
+
+async function status(co: Coordinator): Promise<{
+  phase: string;
+  pagesFound: number;
+  pagesCrawled: number;
+  frontierSize: number;
+}> {
+  const res = await co.fetch(new Request("https://do/status"));
+  return (await res.json()) as Awaited<ReturnType<typeof status>>;
+}
+
+async function claim(
+  co: Coordinator,
+  runId: string,
+  opts: Partial<{ followLinks: boolean; origin: string }> = {},
+) {
+  return post(co, "/claim", {
+    runId,
+    origin: opts.origin ?? "https://example.com",
+    disallow: [],
+    discoveryMethod: "sitemap",
+    followLinks: opts.followLinks ?? false,
+  });
+}
+
+describe("SiteCoordinator", () => {
+  it("constructs and reports idle status", async () => {
+    await expect(status(coordinator())).resolves.toMatchObject({ phase: "idle", pagesFound: 0 });
+  });
+
+  it("rejects a different active run and releases the mutex after finish", async () => {
+    const co = coordinator();
+    await expect(claim(co, "run-a")).resolves.toMatchObject({ status: 200 });
+
+    const conflict = await claim(co, "run-b");
+    expect(conflict).toMatchObject({
+      status: 409,
+      body: { error: "run_in_progress", runId: "run-a" },
+    });
+
+    await post(co, "/finish", { runId: "run-a", phase: "done" });
+    await expect(claim(co, "run-b")).resolves.toMatchObject({ status: 200 });
+  });
+
+  it("ignores seed calls for foreign runs", async () => {
+    const co = coordinator();
+    await claim(co, "run-a");
+
+    const seeded = await post<{ accepted: unknown[] }>(co, "/seed", {
+      runId: "run-b",
+      urls: ["https://example.com/a"],
+      baseUrl: "https://example.com/",
+      depth: 0,
+    });
+
+    expect(seeded.body.accepted).toEqual([]);
+    expect(await status(co)).toMatchObject({ phase: "discovering", pagesFound: 0 });
+  });
+
+  it("seeds unique same-origin URLs and enforces the page budget", async () => {
+    const co = coordinator();
+    await claim(co, "run-a");
+    const urls = Array.from({ length: MAX_PAGES + 5 }, (_, i) => `https://example.com/p${i}`);
+
+    const seeded = await post<{ accepted: { url: string; depth: number }[] }>(co, "/seed", {
+      runId: "run-a",
+      urls: [urls[0]!, ...urls, "https://other.test/x"],
+      baseUrl: "https://example.com/",
+      depth: 0,
+    });
+
+    expect(seeded.body.accepted).toHaveLength(MAX_PAGES);
+    expect(new Set(seeded.body.accepted.map((u) => u.url)).size).toBe(MAX_PAGES);
+    expect(await status(co)).toMatchObject({ phase: "crawling", pagesFound: MAX_PAGES });
+  });
+
+  it("drains a single completed URL", async () => {
+    const co = coordinator();
+    await claim(co, "run-a");
+    await post(co, "/seed", {
+      runId: "run-a",
+      urls: ["https://example.com/a"],
+      baseUrl: "https://example.com/",
+      depth: 0,
+    });
+
+    const completed = await post<{ drained: boolean; pagesCrawled: number }>(co, "/complete", {
+      runId: "run-a",
+      url: "https://example.com/a",
+      depth: 0,
+    });
+
+    expect(completed.body).toMatchObject({ drained: true, pagesCrawled: 1 });
+    expect(await status(co)).toMatchObject({ phase: "generating", pagesCrawled: 1 });
+  });
+
+  it("admits discovered links below the depth cap but not at the cap", async () => {
+    const co = coordinator();
+    await claim(co, "run-a", { followLinks: true });
+    await post(co, "/seed", {
+      runId: "run-a",
+      urls: ["https://example.com/a", "https://example.com/deep"],
+      baseUrl: "https://example.com/",
+      depth: 0,
+    });
+
+    const belowCap = await post<{ accepted: { url: string; depth: number }[]; drained: boolean }>(
+      co,
+      "/complete",
+      {
+        runId: "run-a",
+        url: "https://example.com/a",
+        links: ["https://example.com/b"],
+        depth: MAX_DEPTH - 1,
+      },
+    );
+    expect(belowCap.body.accepted).toEqual([{ url: "https://example.com/b", depth: MAX_DEPTH }]);
+    expect(belowCap.body.drained).toBe(false);
+
+    const atCap = await post<{ accepted: { url: string; depth: number }[] }>(co, "/complete", {
+      runId: "run-a",
+      url: "https://example.com/deep",
+      links: ["https://example.com/c"],
+      depth: MAX_DEPTH,
+    });
+    expect(atCap.body.accepted).toEqual([]);
+  });
+
+  it("ignores complete calls for foreign runs", async () => {
+    const co = coordinator();
+    await claim(co, "run-a");
+    await post(co, "/seed", {
+      runId: "run-a",
+      urls: ["https://example.com/a"],
+      baseUrl: "https://example.com/",
+      depth: 0,
+    });
+
+    const completed = await post<{
+      pagesFound: number;
+      pagesCrawled: number;
+      drained: boolean;
+      capped: boolean;
+    }>(
+      co,
+      "/complete",
+      {
+        runId: "run-b",
+        url: "https://example.com/a",
+        depth: 0,
+      },
+    );
+
+    expect(completed.body).toEqual({
+      accepted: [],
+      drained: false,
+      pagesFound: 0,
+      pagesCrawled: 0,
+      capped: false,
+    });
+    expect(await status(co)).toMatchObject({ pagesFound: 1, pagesCrawled: 0 });
+  });
+
+  it("reports when the page budget was exhausted", async () => {
+    const co = coordinator();
+    await claim(co, "run-a");
+    const urls = Array.from({ length: MAX_PAGES + 1 }, (_, i) => `https://example.com/p${i}`);
+    await post(co, "/seed", {
+      runId: "run-a",
+      urls,
+      baseUrl: "https://example.com/",
+      depth: 0,
+    });
+
+    const completed = await post<{ capped: boolean }>(co, "/complete", {
+      runId: "run-a",
+      url: "https://example.com/p0",
+      depth: 0,
+    });
+
+    expect(completed.body.capped).toBe(true);
+  });
+
+  it("counts duplicate complete calls only once", async () => {
+    const co = coordinator();
+    await claim(co, "run-a");
+    await post(co, "/seed", {
+      runId: "run-a",
+      urls: ["https://example.com/a"],
+      baseUrl: "https://example.com/",
+      depth: 0,
+    });
+
+    await post(co, "/complete", { runId: "run-a", url: "https://example.com/a", depth: 0 });
+    const duplicate = await post<{ pagesCrawled: number }>(co, "/complete", {
+      runId: "run-a",
+      url: "https://example.com/a",
+      depth: 0,
+    });
+
+    expect(duplicate.body.pagesCrawled).toBe(1);
+  });
+
+  it("keeps the real count when one of several URLs is completed twice", async () => {
+    const co = coordinator();
+    await claim(co, "run-a");
+    await post(co, "/seed", {
+      runId: "run-a",
+      urls: ["https://example.com/a", "https://example.com/b"],
+      baseUrl: "https://example.com/",
+      depth: 0,
+    });
+
+    await post(co, "/complete", { runId: "run-a", url: "https://example.com/a", depth: 0 });
+    await post(co, "/complete", { runId: "run-a", url: "https://example.com/a", depth: 0 });
+    const completed = await post<{ pagesCrawled: number; drained: boolean }>(co, "/complete", {
+      runId: "run-a",
+      url: "https://example.com/b",
+      depth: 0,
+    });
+
+    expect(completed.body).toMatchObject({ pagesCrawled: 2, drained: true });
+  });
+});

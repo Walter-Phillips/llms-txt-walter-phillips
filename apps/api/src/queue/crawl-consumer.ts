@@ -373,6 +373,7 @@ async function handlePage(env: Env, msg: Extract<CrawlMessage, { type: "page" }>
         status: "generating",
         pagesFound: completion.pagesFound,
         pagesCrawled: completion.pagesCrawled,
+        ...(completion.capped ? { capReason: "max_pages" } : {}),
       })
       .where(eq(crawlRuns.id, msg.runId));
     await env.CRAWL_QUEUE.send({ type: "generate", runId: msg.runId, siteId: msg.siteId });

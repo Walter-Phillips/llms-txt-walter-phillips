@@ -5,6 +5,7 @@ import type { Env } from "./bindings";
 import { sitesRouter } from "./api/sites";
 import { jobsRouter } from "./api/jobs";
 import { filesRouter } from "./api/files";
+import { rateLimit } from "./middleware/rate-limit";
 
 export function buildApp() {
   const app = new Hono<{ Bindings: Env }>();
@@ -12,6 +13,9 @@ export function buildApp() {
   app.use("/api/*", cors());
   // The hosted file is public and meant to be fetched cross-origin (UI, proxies).
   app.use("/sites/*", cors());
+  const writeRateLimit = rateLimit({ limit: 10, windowS: 60, routeClass: "write" });
+  app.use("/api/sites", writeRateLimit);
+  app.use("/api/sites/*", writeRateLimit);
 
   app.get("/health", (c) => c.json(healthResponseSchema.parse({ status: "ok" })));
 

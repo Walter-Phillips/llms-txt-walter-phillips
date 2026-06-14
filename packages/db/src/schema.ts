@@ -41,6 +41,7 @@ export const pages = sqliteTable(
   (t) => ({
     siteUrlIdx: uniqueIndex("pages_site_url_idx").on(t.siteId, t.url),
     siteIdx: index("pages_site_idx").on(t.siteId),
+    siteStatusIdx: index("pages_site_status_idx").on(t.siteId, t.status),
   }),
 );
 
@@ -58,6 +59,7 @@ export const crawlRuns = sqliteTable(
     pagesChanged: integer("pages_changed").notNull().default(0),
     changeSummary: text("change_summary"),
     discoveryMethod: text("discovery_method"),
+    capReason: text("cap_reason"),
     error: text("error"),
     startedAt: integer("started_at"),
     finishedAt: integer("finished_at"),
@@ -78,6 +80,7 @@ export const fileVersions = sqliteTable(
     version: integer("version").notNull(),
     r2Key: text("r2_key").notNull(),
     changeSummary: text("change_summary"),
+    generatedBy: text("generated_by"),
     createdAt: integer("created_at").notNull(),
   },
   (t) => ({

@@ -8,6 +8,7 @@ import { isHtml, politeFetch } from "../crawler/fetcher";
 import { extract } from "../crawler/extract";
 import { fetchRobots } from "../crawler/robots";
 import { discoverSitemapEntries } from "../crawler/sitemap";
+import { urlPathDepth } from "../lib/url";
 import {
   buildChangeSet,
   classifyConditionalGet,
@@ -73,6 +74,7 @@ async function checkSite(env: Env, siteId: string): Promise<void> {
   const conditional: { url: string; outcome: ConditionalOutcome }[] = [];
   const hashes: { url: string; storedHash: string | null; currentHash: string | null }[] = [];
   let sitemapDiff;
+  const validators = new Map(activePages.map((p) => [p.url, p]));
 
   const record = (url: string, result: CheckResult): void => {
     const resolved = resolveCheck(url, result);
@@ -84,7 +86,6 @@ async function checkSite(env: Env, siteId: string): Promise<void> {
     // Layer 1: structural diff is nearly free.
     sitemapDiff = diffSitemap(activePages, sitemap);
     // Layer 2: verify lastmod candidates with conditional GETs (cheap 304s).
-    const validators = new Map(activePages.map((p) => [p.url, p]));
     for (const url of byDepth(sitemapDiff.lastmodChanged).slice(0, MAX_CONDITIONAL_GETS)) {
       const stored = validators.get(url);
       if (!stored) continue;
@@ -94,7 +95,7 @@ async function checkSite(env: Env, siteId: string): Promise<void> {
     // No sitemap: sample known pages, shallowest first (homepage and section
     // roots change most and matter most to llms.txt structure).
     for (const page of byDepth(activePages.map((p) => p.url)).slice(0, MAX_CONDITIONAL_GETS)) {
-      const stored = activePages.find((p) => p.url === page);
+      const stored = validators.get(page);
       if (!stored) continue;
       record(page, await conditionalCheck(page, stored));
     }
@@ -220,12 +221,5 @@ async function fetchSitemap(origin: string, declared: string[]): Promise<Sitemap
 
 /** Sort URLs by path depth, shallowest first; stable on ties via string order. */
 export function byDepth(urls: string[]): string[] {
-  const depth = (u: string): number => {
-    try {
-      return new URL(u).pathname.split("/").filter(Boolean).length;
-    } catch {
-      return Number.MAX_SAFE_INTEGER;
-    }
-  };
-  return [...urls].sort((a, b) => depth(a) - depth(b) || a.localeCompare(b));
+  return [...urls].sort((a, b) => urlPathDepth(a) - urlPathDepth(b) || a.localeCompare(b));
 }

@@ -64,3 +64,4 @@ crons = ["*/15 * * * *"]
 
 [vars]
 APP_ORIGIN = "https://llms-txt.example.com"
+# RATE_LIMIT_ENABLED = "1"

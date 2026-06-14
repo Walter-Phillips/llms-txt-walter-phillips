@@ -14,4 +14,5 @@ export type Env = {
   SITE_COORDINATOR: DurableObjectNamespace;
   ANTHROPIC_API_KEY: string;
   APP_ORIGIN: string;
+  RATE_LIMIT_ENABLED?: string;
 };

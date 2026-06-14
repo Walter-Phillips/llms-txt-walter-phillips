@@ -86,6 +86,7 @@ export async function generate(
   // Pass 1: deterministic heuristics — this output is the floor.
   const inventory = buildInventory(rows, origin);
   let content = render(inventory, defaultSummary(inventory));
+  let generatedBy: "heuristic" | "llm-refined" = "heuristic";
   const baseCheck = validate(content, origin);
   if (!baseCheck.ok) {
     throw new Error(`generate: heuristic output failed validation: ${baseCheck.errors.join("; ")}`);
@@ -100,6 +101,7 @@ export async function generate(
       const refinedCheck = validate(refinedContent, origin);
       if (refinedCheck.ok) {
         content = refinedContent;
+        generatedBy = "llm-refined";
       } else {
         console.warn("generate: refined output failed validation, shipping pass 1", {
           siteId,
@@ -140,6 +142,7 @@ export async function generate(
       version,
       r2Key,
       changeSummary: changeSummary ?? "initial generation",
+      generatedBy,
       createdAt: now,
     });
   } catch (err) {

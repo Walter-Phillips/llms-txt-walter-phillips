@@ -27,6 +27,12 @@ export type Phase = z.infer<typeof phaseSchema>;
 export const discoveryMethodSchema = z.enum(["sitemap", "links", "rendered"]);
 export type DiscoveryMethod = z.infer<typeof discoveryMethodSchema>;
 
+export const capReasonSchema = z.enum(["max_pages"]);
+export type CapReason = z.infer<typeof capReasonSchema>;
+
+export const generatedBySchema = z.enum(["heuristic", "llm-refined"]);
+export type GeneratedBy = z.infer<typeof generatedBySchema>;
+
 /** Live snapshot served by SiteCoordinator DO at GET /status. */
 export const liveStatusSchema = z.object({
   runId: z.string().nullable(),
@@ -64,6 +70,7 @@ export const runSchema = z.object({
   pagesCrawled: z.number(),
   pagesChanged: z.number(),
   discoveryMethod: z.string().nullable(),
+  capReason: capReasonSchema.nullable().optional(),
   error: z.string().nullable(),
   startedAt: z.number().nullable(),
   finishedAt: z.number().nullable(),
@@ -77,6 +84,7 @@ export const fileVersionSchema = z.object({
   version: z.number(),
   r2Key: z.string(),
   changeSummary: z.string().nullable(),
+  generatedBy: generatedBySchema.nullable().optional(),
   createdAt: z.number(),
 });
 export type FileVersion = z.infer<typeof fileVersionSchema>;

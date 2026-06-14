@@ -13,6 +13,8 @@ export function ResultView({ siteId }: { siteId: string }) {
   const [site, setSite] = useState<Site | null>(null);
   const [version, setVersion] = useState<number | null>(null);
   const [versionAt, setVersionAt] = useState<number | null>(null);
+  const [generatedBy, setGeneratedBy] = useState<"heuristic" | "llm-refined" | null>(null);
+  const [capReason, setCapReason] = useState<"max_pages" | null>(null);
   const [content, setContent] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [toggling, setToggling] = useState(false);
@@ -26,6 +28,16 @@ export function ResultView({ siteId }: { siteId: string }) {
         setSite(s);
         setVersion(latestVersion?.version ?? null);
         setVersionAt(latestVersion?.createdAt ?? null);
+        setGeneratedBy(latestVersion?.generatedBy ?? null);
+        setCapReason(null);
+        if (latestVersion?.runId) {
+          try {
+            const job = await api.getJob(latestVersion.runId);
+            if (!cancelled) setCapReason(job.run.capReason ?? null);
+          } catch {
+            if (!cancelled) setCapReason(null);
+          }
+        }
         const text = await api.getLlmsTxt(s.domain);
         if (!cancelled) setContent(text);
       } catch {
@@ -65,6 +77,7 @@ export function ResultView({ siteId }: { siteId: string }) {
 
   const hosted = hostedFileUrl(site.domain);
   const monitoringOn = site.monitoring === 1;
+  const generatedByLabel = generatedBy === "llm-refined" ? "AI-refined" : generatedBy === "heuristic" ? "Heuristic" : null;
 
   return (
     <div className="grid gap-8 lg:grid-cols-[1fr_280px]">
@@ -74,6 +87,11 @@ export function ResultView({ siteId }: { siteId: string }) {
             {site.domain}/llms.txt
             {version != null ? <span className="text-accent"> · v{version}</span> : null}
           </p>
+          {generatedByLabel ? (
+            <span className="border border-rule px-2 py-1 text-xs font-medium text-ink-soft">
+              {generatedByLabel}
+            </span>
+          ) : null}
           <div className="flex gap-2">
             <CopyButton text={content} />
             <Button
@@ -94,6 +112,11 @@ export function ResultView({ siteId }: { siteId: string }) {
           </div>
         </div>
         <div className="px-5 py-4">
+          {capReason === "max_pages" ? (
+            <p className="mb-4 border-l-2 border-accent pl-3 text-sm text-ink-soft">
+              Crawl limited to 1,000 pages because this site is larger.
+            </p>
+          ) : null}
           <LlmsText content={content} />
         </div>
         <div className="px-5">

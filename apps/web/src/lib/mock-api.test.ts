@@ -1,6 +1,17 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MOCK_TIMELINE, mockClient, resetMockState } from "./mock-api";
 
+const METHODS = [
+  "createSite",
+  "getSite",
+  "getJob",
+  "getVersions",
+  "getPages",
+  "getDiff",
+  "setMonitoring",
+  "getLlmsTxt",
+] as const;
+
 describe("mock API simulation", () => {
   beforeEach(() => {
     vi.useFakeTimers();
@@ -76,5 +87,12 @@ describe("mock API simulation", () => {
 
   it("requires the same full URL shape as the Worker", async () => {
     await expect(mockClient.createSite("acme.dev")).rejects.toMatchObject({ status: 400 });
+  });
+
+  it("exposes exactly the LlmsApi method set", () => {
+    expect(Object.keys(mockClient).sort()).toEqual([...METHODS].sort());
+    for (const method of METHODS) {
+      expect(typeof mockClient[method]).toBe("function");
+    }
   });
 });

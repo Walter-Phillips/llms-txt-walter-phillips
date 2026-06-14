@@ -244,7 +244,7 @@ function parseOrigin(url: string): string {
   return `${parsed.protocol}//${parsed.hostname.toLowerCase()}`;
 }
 
-export const mockClient: LlmsApi = {
+export const mockClient = {
   async createSite(url) {
     const origin = parseOrigin(url);
     const record = ensureSite(origin);
@@ -309,7 +309,12 @@ export const mockClient: LlmsApi = {
     if (!record || !latest) throw new ApiRequestError(404, "file_not_found");
     return record.contents.get(latest.version) ?? makeLlmsTxt(origin, latest.version);
   },
-};
+} satisfies LlmsApi;
+
+// Compile-time guard: mockClient must satisfy the same contract as the real
+// client. Drift becomes a typecheck failure instead of a mock-mode surprise.
+const _mockSatisfiesContract: LlmsApi = mockClient;
+void _mockSatisfiesContract;
 
 /** Test helper: wipe all simulated state. */
 export function resetMockState(): void {

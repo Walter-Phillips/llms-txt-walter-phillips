@@ -17,6 +17,7 @@ type State = {
   inFlight: string[];
   seen: string[];
   depths: Record<string, number>;
+  capped: boolean;
 };
 
 const IDLE_STATE: State = {
@@ -31,6 +32,7 @@ const IDLE_STATE: State = {
   inFlight: [],
   seen: [],
   depths: {},
+  capped: false,
 };
 
 export type ClaimRequest = {
@@ -47,6 +49,7 @@ export type CompleteResponse = SeedResponse & {
   drained: boolean;
   pagesFound: number;
   pagesCrawled: number;
+  capped: boolean;
 };
 
 /**
@@ -126,11 +129,14 @@ export class SiteCoordinator extends DurableObject<Env> {
         drained: false,
         pagesFound: 0,
         pagesCrawled: 0,
+        capped: false,
       } satisfies CompleteResponse);
     }
 
+    const before = this.state.inFlight.length;
     this.state.inFlight = this.state.inFlight.filter((u) => u !== body.url);
-    this.state.pagesCrawled++;
+    const wasInFlight = this.state.inFlight.length < before;
+    if (wasInFlight) this.state.pagesCrawled++;
 
     let accepted: { url: string; depth: number }[] = [];
     if (this.state.followLinks && body.links?.length && body.depth < MAX_DEPTH) {
@@ -146,6 +152,7 @@ export class SiteCoordinator extends DurableObject<Env> {
       drained,
       pagesFound: this.state.pagesFound,
       pagesCrawled: this.state.pagesCrawled,
+      capped: this.state.capped,
     } satisfies CompleteResponse);
   }
 
@@ -159,14 +166,21 @@ export class SiteCoordinator extends DurableObject<Env> {
 
   private admit(candidates: string[], baseUrl: string, depth: number): { url: string; depth: number }[] {
     const seen = new Set(this.state.seen);
+    const pageBudget = Math.max(0, MAX_PAGES - this.state.pagesFound);
     const urls = acceptUrls({
       candidates,
       baseUrl,
       origin: this.state.origin ?? "",
       seen,
       disallow: this.state.disallow,
-      pageBudget: Math.max(0, MAX_PAGES - this.state.pagesFound),
+      pageBudget,
     });
+    if (
+      (pageBudget === 0 && candidates.length > 0) ||
+      (urls.length === pageBudget && candidates.length > urls.length)
+    ) {
+      this.state.capped = true;
+    }
     for (const url of urls) {
       this.state.seen.push(url);
       this.state.inFlight.push(url);
