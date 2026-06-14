@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 import { Button } from "@/components/ui/button";
-import { api, ApiRequestError } from "@/lib/api";
+import { api, ApiRequestError, normalizeWebsiteUrl } from "@/lib/api";
 
 export const EXAMPLE_SITES = ["vercel.com", "stripe.com", "hono.dev"] as const;
 
@@ -31,7 +31,7 @@ export function UrlForm() {
     setSubmitting(true);
     setError(null);
     try {
-      const { siteId, runId } = await api.createSite(target.trim());
+      const { siteId, runId } = await api.createSite(normalizeWebsiteUrl(target));
       router.push(`/sites/${siteId}?run=${runId}`);
     } catch (err) {
       setError(friendlySubmitError(err));

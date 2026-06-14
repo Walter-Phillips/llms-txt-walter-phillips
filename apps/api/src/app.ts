@@ -10,6 +10,8 @@ export function buildApp() {
   const app = new Hono<{ Bindings: Env }>();
 
   app.use("/api/*", cors());
+  // The hosted file is public and meant to be fetched cross-origin (UI, proxies).
+  app.use("/sites/*", cors());
 
   app.get("/health", (c) => c.json(healthResponseSchema.parse({ status: "ok" })));
 

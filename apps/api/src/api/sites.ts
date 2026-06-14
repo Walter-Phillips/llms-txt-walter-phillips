@@ -2,11 +2,11 @@ import { Hono } from "hono";
 import { z } from "zod";
 import { nanoid } from "nanoid";
 import { drizzle } from "drizzle-orm/d1";
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 import { sites, crawlRuns, pages, fileVersions } from "@profound-takehome/db";
 import type { Env } from "../bindings";
 import { normalizeOrigin } from "../lib/url";
-import { unifiedDiff } from "./files";
+import { computeDiff, listVersions } from "./files";
 
 export const sitesRouter = new Hono<{ Bindings: Env }>();
 
@@ -90,12 +90,7 @@ sitesRouter.get("/:id/versions", async (c) => {
   const db = drizzle(c.env.DB);
   const site = await db.select().from(sites).where(eq(sites.id, c.req.param("id"))).get();
   if (!site) return c.json({ error: "not_found" }, 404);
-  const versions = await db
-    .select()
-    .from(fileVersions)
-    .where(eq(fileVersions.siteId, site.id))
-    .orderBy(desc(fileVersions.version));
-  return c.json({ versions });
+  return listVersions(c, db, site);
 });
 
 sitesRouter.get("/:id/pages", async (c) => {
@@ -127,21 +122,5 @@ sitesRouter.get("/:id/diff", async (c) => {
   const site = await db.select().from(sites).where(eq(sites.id, c.req.param("id"))).get();
   if (!site) return c.json({ error: "not_found" }, 404);
 
-  const rows = await db
-    .select()
-    .from(fileVersions)
-    .where(and(eq(fileVersions.siteId, site.id), inArray(fileVersions.version, [from, to])));
-  const fromRow = rows.find((r) => r.version === from);
-  const toRow = rows.find((r) => r.version === to);
-  if (!fromRow || !toRow) return c.json({ error: "version_not_found" }, 404);
-
-  const [fromObj, toObj] = await Promise.all([
-    c.env.FILES.get(fromRow.r2Key),
-    c.env.FILES.get(toRow.r2Key),
-  ]);
-  if (!fromObj || !toObj) return c.json({ error: "file_missing" }, 500);
-
-  const [fromText, toText] = await Promise.all([fromObj.text(), toObj.text()]);
-  const diff = unifiedDiff(fromText, toText, `llms.txt v${from}`, `llms.txt v${to}`);
-  return c.json({ from, to, diff });
+  return computeDiff(c, db, site, from, to);
 });

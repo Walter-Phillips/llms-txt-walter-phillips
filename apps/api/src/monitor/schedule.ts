@@ -1,5 +1,5 @@
 import { drizzle } from "drizzle-orm/d1";
-import { and, eq, lte, sql } from "drizzle-orm";
+import { and, eq, lte } from "drizzle-orm";
 import { sites } from "@profound-takehome/db";
 import type { Env } from "../bindings";
 
@@ -28,13 +28,20 @@ const HOUR = 3600;
 const WEEK = 7 * 24 * HOUR;
 
 /**
- * Adaptive cadence math — pure, easy to unit test.
- * - changes found → halve interval (floor 1h)
- * - no changes    → 1.5× interval (ceiling 7d)
+ * Adaptive cadence math — pure, easy to unit test. `streak` is the site's
+ * change streak BEFORE this check (positive = consecutive changing checks,
+ * negative = consecutive quiet checks); a strong streak (|streak| ≥ 3)
+ * compounds the adjustment so we converge faster on a site's real cadence.
+ * - changes found → ÷2, or ÷3 on a strong positive streak (floor 1h)
+ * - no changes    → ×1.5, or ×2 on a strong negative streak (ceiling 7d)
  */
-export function nextInterval(currentS: number, changesFound: boolean): number {
-  if (changesFound) return Math.max(Math.floor(currentS / 2), HOUR);
-  return Math.min(Math.floor(currentS * 1.5), WEEK);
+export function nextInterval(currentS: number, changesFound: boolean, streak: number): number {
+  if (changesFound) {
+    const divisor = streak >= 3 ? 3 : 2;
+    return Math.max(Math.floor(currentS / divisor), HOUR);
+  }
+  const factor = streak <= -3 ? 2 : 1.5;
+  return Math.min(Math.floor(currentS * factor), WEEK);
 }
 
 export type CadenceSignals = {
@@ -67,6 +74,3 @@ export function nextStreak(current: number, changesFound: boolean): number {
   if (changesFound) return current > 0 ? current + 1 : 1;
   return current < 0 ? current - 1 : -1;
 }
-
-// Hint for tsc that `sql` is intentionally available for raw queries later.
-void sql;

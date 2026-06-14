@@ -41,94 +41,97 @@ interface MockSite {
 }
 
 const sites = new Map<string, MockSite>();
-const sitesByDomain = new Map<string, string>();
+const sitesByOrigin = new Map<string, string>();
 const runs = new Map<string, MockRun>();
 let runCounter = 0;
 
-function slugify(domain: string): string {
-  return domain.replace(/[^a-z0-9]+/gi, "-");
+function hostnameFromOrigin(origin: string): string {
+  return new URL(origin).hostname;
 }
 
-function titleCase(domain: string): string {
-  const name = domain.replace(/^www\./, "").split(".")[0];
+function slugify(origin: string): string {
+  return hostnameFromOrigin(origin).replace(/[^a-z0-9]+/gi, "-");
+}
+
+function titleCase(origin: string): string {
+  const name = hostnameFromOrigin(origin).replace(/^www\./, "").split(".")[0];
   return name.charAt(0).toUpperCase() + name.slice(1);
 }
 
-export function makeLlmsTxt(domain: string, version: number): string {
-  const name = titleCase(domain);
-  const base = `https://${domain}`;
+export function makeLlmsTxt(origin: string, version: number): string {
+  const host = hostnameFromOrigin(origin);
+  const name = titleCase(origin);
   const lines = [
     `# ${name}`,
     "",
-    `> ${name} builds developer tooling. This file lists the canonical pages of ${domain} for language models.`,
+    `> ${name} builds developer tooling. This file lists the canonical pages of ${host} for language models.`,
     "",
     `${name} publishes product pages, documentation, and a changelog. URLs below are stable and crawlable.`,
     "",
     "## Docs",
     "",
-    `- [Quickstart](${base}/docs/quickstart): Install, configure, and ship in five minutes`,
-    `- [API reference](${base}/docs/api): Complete endpoint and type reference`,
+    `- [Quickstart](${origin}/docs/quickstart): Install, configure, and ship in five minutes`,
+    `- [API reference](${origin}/docs/api): Complete endpoint and type reference`,
     version >= 2
-      ? `- [Authentication](${base}/docs/auth): Token issuance, scopes, and rotation`
+      ? `- [Authentication](${origin}/docs/auth): Token issuance, scopes, and rotation`
       : null,
-    `- [Self-hosting](${base}/docs/self-hosting): Run the platform on your own infrastructure`,
+    `- [Self-hosting](${origin}/docs/self-hosting): Run the platform on your own infrastructure`,
     "",
     "## Product",
     "",
-    `- [Pricing](${base}/pricing): Plans, limits, and overage policy`,
-    `- [Integrations](${base}/integrations): First-party connectors and webhooks`,
-    version >= 3 ? `- [Changelog](${base}/changelog): Dated release notes, newest first` : null,
+    `- [Pricing](${origin}/pricing): Plans, limits, and overage policy`,
+    `- [Integrations](${origin}/integrations): First-party connectors and webhooks`,
+    version >= 3 ? `- [Changelog](${origin}/changelog): Dated release notes, newest first` : null,
     "",
     "## Optional",
     "",
-    `- [Blog](${base}/blog): Engineering notes and release deep-dives`,
-    `- [About](${base}/about): Company, team, and contact details`,
+    `- [Blog](${origin}/blog): Engineering notes and release deep-dives`,
+    `- [About](${origin}/about): Company, team, and contact details`,
   ].filter((l): l is string => l !== null);
   return lines.join("\n") + "\n";
 }
 
-function makePages(domain: string): PageInventoryItem[] {
-  const base = `https://${domain}`;
+function makePages(origin: string): PageInventoryItem[] {
   return [
-    { url: `${base}/`, title: `${titleCase(domain)} — Home`, description: "Landing page", sectionHint: null, status: "ok" },
-    { url: `${base}/docs/quickstart`, title: "Quickstart", description: "Install and ship in five minutes", sectionHint: "Docs", status: "ok" },
-    { url: `${base}/docs/api`, title: "API reference", description: "Endpoints and types", sectionHint: "Docs", status: "ok" },
-    { url: `${base}/docs/auth`, title: "Authentication", description: "Tokens, scopes, rotation", sectionHint: "Docs", status: "ok" },
-    { url: `${base}/docs/self-hosting`, title: "Self-hosting", description: "Run on your own infra", sectionHint: "Docs", status: "ok" },
-    { url: `${base}/pricing`, title: "Pricing", description: "Plans and limits", sectionHint: "Product", status: "ok" },
-    { url: `${base}/integrations`, title: "Integrations", description: "Connectors and webhooks", sectionHint: "Product", status: "ok" },
-    { url: `${base}/changelog`, title: "Changelog", description: "Release notes", sectionHint: "Product", status: "ok" },
-    { url: `${base}/blog`, title: "Blog", description: "Engineering notes", sectionHint: "Optional", status: "ok" },
-    { url: `${base}/about`, title: "About", description: "Company and contact", sectionHint: "Optional", status: "ok" },
-    { url: `${base}/admin`, title: null, description: null, sectionHint: null, status: "skipped" },
-    { url: `${base}/search`, title: "Search", description: null, sectionHint: null, status: "excluded" },
+    { url: `${origin}/`, title: `${titleCase(origin)} — Home`, description: "Landing page", sectionHint: null, status: "ok" },
+    { url: `${origin}/docs/quickstart`, title: "Quickstart", description: "Install and ship in five minutes", sectionHint: "Docs", status: "ok" },
+    { url: `${origin}/docs/api`, title: "API reference", description: "Endpoints and types", sectionHint: "Docs", status: "ok" },
+    { url: `${origin}/docs/auth`, title: "Authentication", description: "Tokens, scopes, rotation", sectionHint: "Docs", status: "ok" },
+    { url: `${origin}/docs/self-hosting`, title: "Self-hosting", description: "Run on your own infra", sectionHint: "Docs", status: "ok" },
+    { url: `${origin}/pricing`, title: "Pricing", description: "Plans and limits", sectionHint: "Product", status: "ok" },
+    { url: `${origin}/integrations`, title: "Integrations", description: "Connectors and webhooks", sectionHint: "Product", status: "ok" },
+    { url: `${origin}/changelog`, title: "Changelog", description: "Release notes", sectionHint: "Product", status: "ok" },
+    { url: `${origin}/blog`, title: "Blog", description: "Engineering notes", sectionHint: "Optional", status: "ok" },
+    { url: `${origin}/about`, title: "About", description: "Company and contact", sectionHint: "Optional", status: "ok" },
+    { url: `${origin}/admin`, title: null, description: null, sectionHint: null, status: "skipped" },
+    { url: `${origin}/search`, title: "Search", description: null, sectionHint: null, status: "excluded" },
   ];
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-function ensureSite(domain: string): MockSite {
-  const existingId = sitesByDomain.get(domain);
+function ensureSite(origin: string): MockSite {
+  const existingId = sitesByOrigin.get(origin);
   if (existingId) return sites.get(existingId)!;
 
-  const id = `site_${slugify(domain)}`;
+  const id = `site_${slugify(origin)}`;
   const now = Date.now();
   // Seed two backdated versions so history + diffs are demoable on the very
   // first run (mock-only behavior; the real API starts at version 1).
   const seeded: FileVersion[] = [1, 2].map((v) => ({
-    id: `ver_${slugify(domain)}_${v}`,
+    id: `ver_${slugify(origin)}_${v}`,
     siteId: id,
     runId: null,
     version: v,
-    r2Key: `${domain}/llms.txt/v${v}`,
+    r2Key: `${origin}/llms.txt/v${v}`,
     changeSummary: v === 1 ? "initial generation" : "1 page added, 1 page modified",
     createdAt: now - (3 - v) * 7 * DAY_MS,
   }));
   const record: MockSite = {
     site: {
       id,
-      domain,
-      displayName: titleCase(domain),
+      domain: origin,
+      displayName: titleCase(origin),
       monitoring: 0,
       checkIntervalS: 21600,
       nextCheckAt: null,
@@ -137,13 +140,13 @@ function ensureSite(domain: string): MockSite {
     },
     versions: seeded,
     contents: new Map([
-      [1, makeLlmsTxt(domain, 1)],
-      [2, makeLlmsTxt(domain, 2)],
+      [1, makeLlmsTxt(origin, 1)],
+      [2, makeLlmsTxt(origin, 2)],
     ]),
-    pages: makePages(domain),
+    pages: makePages(origin),
   };
   sites.set(id, record);
-  sitesByDomain.set(domain, id);
+  sitesByOrigin.set(origin, id);
   return record;
 }
 
@@ -228,32 +231,31 @@ function buildRun(mockRun: MockRun): JobStatusResponse {
   };
 }
 
-function parseDomain(url: string): string {
-  const candidate = /^[a-z][a-z0-9+.-]*:\/\//i.test(url) ? url : `https://${url}`;
+function parseOrigin(url: string): string {
   let parsed: URL;
   try {
-    parsed = new URL(candidate);
+    parsed = new URL(url.trim());
   } catch {
     throw new ApiRequestError(400, "invalid_url: enter a full website address");
   }
-  if (!parsed.hostname.includes(".")) {
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
     throw new ApiRequestError(400, "invalid_url: enter a full website address");
   }
-  return parsed.hostname.toLowerCase();
+  return `${parsed.protocol}//${parsed.hostname.toLowerCase()}`;
 }
 
 export const mockClient: LlmsApi = {
   async createSite(url) {
-    const domain = parseDomain(url);
-    const record = ensureSite(domain);
+    const origin = parseOrigin(url);
+    const record = ensureSite(origin);
     runCounter += 1;
-    const runId = `run_${slugify(domain)}_${runCounter}`;
+    const runId = `run_${slugify(origin)}_${runCounter}`;
     const latest = latestVersion(record);
     runs.set(runId, {
       runId,
       siteId: record.site.id,
       startedAt: Date.now(),
-      shouldFail: domain.includes("error"),
+      shouldFail: hostnameFromOrigin(origin).includes("error"),
       publishesVersion: (latest?.version ?? 0) + 1,
     });
     return { siteId: record.site.id, runId };
@@ -300,19 +302,19 @@ export const mockClient: LlmsApi = {
     return { site: { ...record.site }, latestVersion: latestVersion(record) };
   },
 
-  async getLlmsTxt(domain) {
-    const id = sitesByDomain.get(domain);
+  async getLlmsTxt(origin) {
+    const id = sitesByOrigin.get(origin);
     const record = id ? sites.get(id) : undefined;
     const latest = record ? latestVersion(record) : null;
     if (!record || !latest) throw new ApiRequestError(404, "file_not_found");
-    return record.contents.get(latest.version) ?? makeLlmsTxt(domain, latest.version);
+    return record.contents.get(latest.version) ?? makeLlmsTxt(origin, latest.version);
   },
 };
 
 /** Test helper: wipe all simulated state. */
 export function resetMockState(): void {
   sites.clear();
-  sitesByDomain.clear();
+  sitesByOrigin.clear();
   runs.clear();
   runCounter = 0;
 }

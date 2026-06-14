@@ -152,6 +152,24 @@ describe("buildChangeSet layering", () => {
     expect(c).toEqual({ added: ["/x"], removed: [], modified: [] });
   });
 
+  it("an unchanged content hash does not add a url to modified", () => {
+    // Caller has downgraded the validator-less conditional to "unchanged" once
+    // it had a body-hash verdict, so the equal hash keeps the url out entirely.
+    const c = buildChangeSet({
+      conditional: [{ url: "/p", outcome: "unchanged" }],
+      hashes: [{ url: "/p", storedHash: "h1", currentHash: "h1" }],
+    });
+    expect(c).toEqual(EMPTY_CHANGESET);
+  });
+
+  it("a changed content hash marks the url modified", () => {
+    const c = buildChangeSet({
+      conditional: [{ url: "/p", outcome: "unchanged" }],
+      hashes: [{ url: "/p", storedHash: "h1", currentHash: "h2" }],
+    });
+    expect(c).toEqual({ added: [], removed: [], modified: ["/p"] });
+  });
+
   it("removed wins over modified for the same url", () => {
     const c = buildChangeSet({
       sitemap: { added: [], removed: ["/y"], lastmodChanged: [] },

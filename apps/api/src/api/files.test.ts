@@ -1,5 +1,22 @@
 import { describe, expect, it } from "vitest";
-import { unifiedDiff } from "./files";
+import { domainCandidates, unifiedDiff } from "./files";
+
+describe("domainCandidates", () => {
+  it("accepts encoded origins from public file URLs", () => {
+    expect(domainCandidates("https%3A%2F%2FExample.com")).toEqual([
+      "https://example.com",
+      "https://Example.com",
+    ]);
+  });
+
+  it("keeps legacy host-only domains as origin candidates", () => {
+    expect(domainCandidates("example.com")).toEqual([
+      "example.com",
+      "https://example.com",
+      "http://example.com",
+    ]);
+  });
+});
 
 describe("unifiedDiff", () => {
   it("returns empty string for identical content", () => {

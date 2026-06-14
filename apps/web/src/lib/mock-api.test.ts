@@ -36,7 +36,10 @@ describe("mock API simulation", () => {
     const { versions } = await mockClient.getVersions(siteId);
     expect(versions.map((v) => v.version)).toEqual([3, 2, 1]);
 
-    const file = await mockClient.getLlmsTxt("acme.dev");
+    const site = await mockClient.getSite(siteId);
+    expect(site.site.domain).toBe("https://acme.dev");
+
+    const file = await mockClient.getLlmsTxt("https://acme.dev");
     expect(file).toContain("# Acme");
     expect(file).toContain("## Docs");
   });
@@ -69,5 +72,9 @@ describe("mock API simulation", () => {
 
   it("rejects unparseable URLs with a 400", async () => {
     await expect(mockClient.createSite("not a url")).rejects.toMatchObject({ status: 400 });
+  });
+
+  it("requires the same full URL shape as the Worker", async () => {
+    await expect(mockClient.createSite("acme.dev")).rejects.toMatchObject({ status: 400 });
   });
 });

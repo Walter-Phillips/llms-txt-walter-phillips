@@ -1,8 +1,6 @@
 export type ExtractedPage = {
   title: string | null;
   description: string | null;
-  ogSiteName: string | null;
-  canonical: string | null;
   h1: string | null;
   snippet: string | null;
   contentHash: string;
@@ -33,8 +31,6 @@ export async function extract(body: ReadableStream<Uint8Array>): Promise<Extract
   let description: string | null = null;
   let ogTitle: string | null = null;
   let ogDescription: string | null = null;
-  let ogSiteName: string | null = null;
-  let canonical: string | null = null;
   const links: string[] = [];
 
   // Snippet: first <p> whose accumulated text is substantive.
@@ -64,14 +60,6 @@ export async function extract(body: ReadableStream<Uint8Array>): Promise<Extract
         if (name === "description" && description === null) description = content;
         else if (property === "og:title" && ogTitle === null) ogTitle = content;
         else if (property === "og:description" && ogDescription === null) ogDescription = content;
-        else if (property === "og:site_name" && ogSiteName === null) ogSiteName = content;
-      },
-    })
-    .on("link", {
-      element(el) {
-        if (el.getAttribute("rel")?.toLowerCase() === "canonical" && canonical === null) {
-          canonical = el.getAttribute("href");
-        }
       },
     })
     .on("a", {
@@ -113,8 +101,6 @@ export async function extract(body: ReadableStream<Uint8Array>): Promise<Extract
   return {
     title: cleanTitle,
     description: cleanDescription,
-    ogSiteName,
-    canonical,
     h1: cleanH1,
     snippet,
     contentHash,

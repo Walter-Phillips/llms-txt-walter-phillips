@@ -41,7 +41,7 @@ it("submits a URL and routes to the progress view", async () => {
   submitUrl("acme.dev");
 
   await waitFor(() => {
-    expect(createSiteMock).toHaveBeenCalledWith("acme.dev");
+    expect(createSiteMock).toHaveBeenCalledWith("https://acme.dev");
     expect(pushMock).toHaveBeenCalledWith("/sites/site_acme-dev?run=run_acme-dev_1");
   });
 });
@@ -64,7 +64,7 @@ it("submitting an example chip kicks off a run", async () => {
   fireEvent.click(screen.getByRole("button", { name: "vercel.com" }));
 
   await waitFor(() => {
-    expect(createSiteMock).toHaveBeenCalledWith("vercel.com");
+    expect(createSiteMock).toHaveBeenCalledWith("https://vercel.com");
     expect(pushMock).toHaveBeenCalledWith("/sites/site_vercel-com?run=run_vercel-com_1");
   });
 });

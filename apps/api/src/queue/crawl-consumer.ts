@@ -1,7 +1,7 @@
 import { drizzle } from "drizzle-orm/d1";
 import { and, eq } from "drizzle-orm";
 import { nanoid } from "nanoid";
-import { crawlRuns, pages } from "@profound-takehome/db";
+import { crawlRuns, pages, sites } from "@profound-takehome/db";
 import type { CrawlMessage, Env } from "../bindings";
 import { fetchRobots } from "../crawler/robots";
 import { discoverSitemapEntries } from "../crawler/sitemap";
@@ -9,6 +9,7 @@ import { politeFetch, isHtml } from "../crawler/fetcher";
 import { extract } from "../crawler/extract";
 import { classify } from "../generator/heuristics";
 import { generate } from "../generator";
+import { initialInterval, type CadenceSignals } from "../monitor/schedule";
 import type {
   ClaimRequest,
   CompleteRequest,
@@ -18,6 +19,48 @@ import type {
 } from "../do/site-coordinator";
 
 const MIN_SITEMAP_URLS = 3;
+
+/** Dated path segment like /2024/06/ — a strong blog/archive freshness signal. */
+const DATED_URL = /\/\d{4}\/\d{2}\//;
+/** A URL share above this counts the site as "dated" (blog-heavy). */
+const DATED_URL_SHARE = 0.2;
+
+/**
+ * Derive freshness priors from data already in hand after discovery — no extra
+ * fetches. `hasRss` stays unset because detecting a feed would mean another
+ * network round-trip on the hot crawl path.
+ */
+export function deriveSignals(input: {
+  urls: string[];
+  pageCount: number;
+  isNewsSitemap: boolean;
+}): CadenceSignals {
+  const dated = input.urls.filter((u) => DATED_URL.test(u)).length;
+  const hasDatedUrls = input.urls.length > 0 && dated / input.urls.length >= DATED_URL_SHARE;
+  return {
+    pageCount: input.pageCount,
+    hasNewsSitemap: input.isNewsSitemap,
+    hasDatedUrls,
+  };
+}
+
+/**
+ * Persist the first-check interval prior — but only on the site's initial
+ * crawl. Re-crawls (manual or monitor-triggered) leave the stored interval
+ * alone so the adaptive feedback loop's tuning survives.
+ */
+export async function applyCadencePrior(
+  db: Pick<ReturnType<typeof drizzle>, "update">,
+  siteId: string,
+  trigger: string | undefined,
+  signals: Parameters<typeof deriveSignals>[0],
+): Promise<void> {
+  if (trigger !== "initial") return;
+  await db
+    .update(sites)
+    .set({ checkIntervalS: initialInterval(deriveSignals(signals)) })
+    .where(eq(sites.id, siteId));
+}
 
 function coordinator(env: Env, siteId: string): DurableObjectStub {
   return env.SITE_COORDINATOR.get(env.SITE_COORDINATOR.idFromName(siteId));
@@ -47,6 +90,30 @@ async function enqueuePages(
       delaySeconds: Math.floor(i / 4),
     })),
   );
+}
+
+async function failRunAfterEnqueueFailure(
+  db: ReturnType<typeof drizzle>,
+  stub: DurableObjectStub,
+  runId: string,
+  context: string,
+  err: unknown,
+): Promise<void> {
+  const detail = err instanceof Error ? err.message : String(err);
+  await db
+    .update(crawlRuns)
+    .set({
+      status: "error",
+      error: `failed to enqueue ${context}: ${detail}`,
+      finishedAt: Math.floor(Date.now() / 1000),
+    })
+    .where(eq(crawlRuns.id, runId));
+
+  try {
+    await doCall(stub, "/finish", { runId, phase: "error" });
+  } catch (finishErr) {
+    console.error("failed to mark DO run error after enqueue failure", { runId, finishErr });
+  }
 }
 
 async function handleDiscover(
@@ -130,6 +197,19 @@ async function handleDiscover(
     })
     .where(eq(crawlRuns.id, msg.runId));
 
+  // Set the adaptive-cadence prior only on a site's first crawl. Monitor and
+  // manual re-crawls must not clobber an interval the feedback loop has tuned.
+  const run = await db
+    .select({ trigger: crawlRuns.trigger })
+    .from(crawlRuns)
+    .where(eq(crawlRuns.id, msg.runId))
+    .get();
+  await applyCadencePrior(db, msg.siteId, run?.trigger, {
+    urls: seeded.accepted.map((p) => p.url),
+    pageCount: seeded.accepted.length,
+    isNewsSitemap: useSitemap && sitemap.isNews,
+  });
+
   if (seeded.accepted.length === 0) {
     await db
       .update(crawlRuns)
@@ -139,7 +219,12 @@ async function handleDiscover(
     return;
   }
 
-  await enqueuePages(env, msg.runId, msg.siteId, seeded.accepted);
+  try {
+    await enqueuePages(env, msg.runId, msg.siteId, seeded.accepted);
+  } catch (err) {
+    await failRunAfterEnqueueFailure(db, stub, msg.runId, "seed pages", err);
+    return;
+  }
 }
 
 async function handlePage(env: Env, msg: Extract<CrawlMessage, { type: "page" }>): Promise<void> {
@@ -232,7 +317,12 @@ async function handlePage(env: Env, msg: Extract<CrawlMessage, { type: "page" }>
     depth: msg.depth,
   } satisfies CompleteRequest);
 
-  await enqueuePages(env, msg.runId, msg.siteId, completion.accepted);
+  try {
+    await enqueuePages(env, msg.runId, msg.siteId, completion.accepted);
+  } catch (err) {
+    await failRunAfterEnqueueFailure(db, stub, msg.runId, "discovered pages", err);
+    return;
+  }
 
   if (completion.drained) {
     await db

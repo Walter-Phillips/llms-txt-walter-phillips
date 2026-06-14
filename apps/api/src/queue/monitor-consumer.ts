@@ -4,7 +4,8 @@ import { and, eq, inArray } from "drizzle-orm";
 import { sites, pages, crawlRuns } from "@profound-takehome/db";
 import { summarizeChanges } from "@profound-takehome/shared";
 import type { Env, MonitorMessage } from "../bindings";
-import { politeFetch } from "../crawler/fetcher";
+import { isHtml, politeFetch } from "../crawler/fetcher";
+import { extract } from "../crawler/extract";
 import {
   buildChangeSet,
   classifyConditionalGet,
@@ -59,13 +60,21 @@ async function checkSite(env: Env, siteId: string): Promise<void> {
       etag: pages.etag,
       lastModified: pages.lastModified,
       sitemapLastmod: pages.sitemapLastmod,
+      contentHash: pages.contentHash,
     })
     .from(pages)
     .where(and(eq(pages.siteId, siteId), eq(pages.status, "active")));
 
   const sitemap = await fetchSitemap(site.domain);
   const conditional: { url: string; outcome: ConditionalOutcome }[] = [];
+  const hashes: { url: string; storedHash: string | null; currentHash: string | null }[] = [];
   let sitemapDiff;
+
+  const record = (url: string, result: CheckResult): void => {
+    const resolved = resolveCheck(url, result);
+    conditional.push(resolved.conditional);
+    if (resolved.hash) hashes.push(resolved.hash);
+  };
 
   if (sitemap) {
     // Layer 1: structural diff is nearly free.
@@ -75,7 +84,7 @@ async function checkSite(env: Env, siteId: string): Promise<void> {
     for (const url of byDepth(sitemapDiff.lastmodChanged).slice(0, MAX_CONDITIONAL_GETS)) {
       const stored = validators.get(url);
       if (!stored) continue;
-      conditional.push({ url, outcome: await conditionalCheck(url, stored) });
+      record(url, await conditionalCheck(url, stored));
     }
   } else {
     // No sitemap: sample known pages, shallowest first (homepage and section
@@ -83,11 +92,11 @@ async function checkSite(env: Env, siteId: string): Promise<void> {
     for (const page of byDepth(activePages.map((p) => p.url)).slice(0, MAX_CONDITIONAL_GETS)) {
       const stored = activePages.find((p) => p.url === page);
       if (!stored) continue;
-      conditional.push({ url: page, outcome: await conditionalCheck(page, stored) });
+      record(page, await conditionalCheck(page, stored));
     }
   }
 
-  const changes = buildChangeSet({ sitemap: sitemapDiff, conditional });
+  const changes = buildChangeSet({ sitemap: sitemapDiff, conditional, hashes });
   const changesFound = isRegenerationWorthy(changes);
   const now = Math.floor(Date.now() / 1000);
 
@@ -115,7 +124,8 @@ async function checkSite(env: Env, siteId: string): Promise<void> {
     await env.CRAWL_QUEUE.send({ type: "discover", runId, siteId, url: site.domain });
   }
 
-  const interval = nextInterval(site.checkIntervalS, changesFound);
+  // Pass the streak BEFORE this check so a sustained trend compounds cadence.
+  const interval = nextInterval(site.checkIntervalS, changesFound, site.changeStreak);
   await db
     .update(sites)
     .set({
@@ -126,22 +136,66 @@ async function checkSite(env: Env, siteId: string): Promise<void> {
     .where(eq(sites.id, siteId));
 }
 
+/**
+ * Outcome of one conditional GET. When `currentHash` is present we computed a
+ * definitive content hash from the fetched body — the caller treats that as
+ * authoritative over the conditional `outcome` for "modified" verdicts.
+ */
+type CheckResult = {
+  outcome: ConditionalOutcome;
+  storedHash: string | null;
+  /** undefined = no body-level verdict; null = stored had no hash to compare. */
+  currentHash?: string | null;
+};
+
+/**
+ * Fold one check into the detection inputs, avoiding double-counting. A
+ * definitive content-hash verdict (currentHash present) is authoritative, so
+ * we downgrade a conditional "modified" to "unchanged" for that URL — the
+ * hash, not a validator-less guess, decides whether it lands in `modified`.
+ * "removed"/"error"/validator-confirmed "unchanged" outcomes are kept.
+ */
+export function resolveCheck(
+  url: string,
+  result: CheckResult,
+): {
+  conditional: { url: string; outcome: ConditionalOutcome };
+  hash?: { url: string; storedHash: string | null; currentHash: string | null };
+} {
+  if (result.currentHash !== undefined) {
+    return {
+      conditional: { url, outcome: result.outcome === "modified" ? "unchanged" : result.outcome },
+      hash: { url, storedHash: result.storedHash, currentHash: result.currentHash },
+    };
+  }
+  return { conditional: { url, outcome: result.outcome } };
+}
+
 async function conditionalCheck(
   url: string,
-  stored: { etag: string | null; lastModified: string | null },
-): Promise<ConditionalOutcome> {
+  stored: { etag: string | null; lastModified: string | null; contentHash: string | null },
+): Promise<CheckResult> {
   try {
     const res = await politeFetch(url, {
       etag: stored.etag ?? undefined,
       lastModified: stored.lastModified ?? undefined,
     });
-    // Drain the body so the connection can be reused; we only need headers.
-    // TODO(integration): use crawler/extract contentHash on this body for a
-    // definitive compare once the crawl stream lands.
+    const outcome = classifyConditionalGet(res, stored);
+
+    // On a 200 with an HTML body, compute a content hash for a definitive
+    // body-level compare — this resolves validator-less false positives that
+    // classifyConditionalGet can only guess at.
+    if (res.status === 200 && res.body && isHtml(res.contentType)) {
+      const { contentHash } = await extract(res.body);
+      return { outcome, storedHash: stored.contentHash, currentHash: contentHash };
+    }
+
+    // No body to hash (304/3xx/error or non-HTML): drain so the connection can
+    // be reused; the conditional outcome stands on its own.
     if (res.body) await res.body.cancel();
-    return classifyConditionalGet(res, stored);
+    return { outcome, storedHash: stored.contentHash };
   } catch {
-    return "error";
+    return { outcome: "error", storedHash: stored.contentHash };
   }
 }
 

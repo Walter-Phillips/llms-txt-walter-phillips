@@ -7,7 +7,11 @@ node_modules/
 dist/
 build/
 coverage/
+*.tsbuildinfo
 .turbo/
+.wrangler/
+.dev.vars
+.pnpm-store/
 .venv/
 __pycache__/
 .pytest_cache/

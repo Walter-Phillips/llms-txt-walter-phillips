@@ -12,11 +12,35 @@ See `ARCHITECTURE.md` for the full system map.
 
 ## Local setup
 
-Prereqs: `pnpm`, `node ≥ 20`, a Cloudflare account (free tier is enough).
+Prereqs for all local modes: `pnpm`, `node ≥ 20`.
 
 ```bash
 pnpm install
+```
 
+### Mock UI mode
+
+Use this when you want to work on the web app without running Cloudflare local
+infrastructure. The UI uses the in-memory mock client and simulates crawl
+progress, generated files, monitoring toggles, and failure paths.
+
+```bash
+cp apps/web/.env.example apps/web/.env.local
+# In apps/web/.env.local, set:
+# NEXT_PUBLIC_API_MOCK=1
+
+pnpm --filter @profound-takehome/web dev
+# web: http://localhost:3000
+```
+
+Submit a URL whose hostname contains `error` to exercise the mock failure path.
+
+### Real Wrangler local infra
+
+Use this when you need the Worker, D1, R2, KV, Queues, Durable Objects, or API
+integration behavior. Requires a Cloudflare account (free tier is enough).
+
+```bash
 # Provision Cloudflare resources (one-time)
 cd apps/api
 pnpm wrangler d1 create llms_txt           # → copy id into wrangler.toml

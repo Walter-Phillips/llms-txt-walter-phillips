@@ -91,12 +91,10 @@ export function classifyConditionalGet(
   }
 
   // No usable validators on either side: HTTP signals alone can't prove the
-  // body changed, but they can't prove it didn't either. Treat as modified —
-  // the crawl pipeline's content-hash upsert is idempotent, so a false
-  // positive costs one re-crawl, not a corrupt file.
-  // TODO(integration): use crawler/extract contentHash here for a body-level
-  // compare once the crawl stream lands, eliminating validator-less false
-  // positives.
+  // body changed. Callers with a fetched body resolve this via a content-hash
+  // compare (buildChangeSet `hashes`), which is authoritative and suppresses
+  // this guess; absent a body the modified verdict stands and the idempotent
+  // re-crawl absorbs any false positive.
   return "modified";
 }
 

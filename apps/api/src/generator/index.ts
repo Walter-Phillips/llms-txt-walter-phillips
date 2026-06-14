@@ -1,5 +1,5 @@
 import { drizzle } from "drizzle-orm/d1";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, gte } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { crawlRuns, fileVersions, pages, sites } from "@profound-takehome/db";
 import type { Env } from "../bindings";
@@ -25,8 +25,10 @@ function defaultSummary(inv: Inventory): string {
  * generator. Called by the crawl-queue "generate" branch once the
  * frontier drains.
  *
- * Contract: reads the page inventory for `siteId` from D1, runs Pass 1
- * heuristics (always) + Pass 2 LLM refinement (when available), validates
+ * Contract: idempotent by `runId`; if a file_versions row already exists for
+ * the run, returns it and marks the run done without publishing another
+ * version. Otherwise reads the page inventory for `siteId` from D1, runs Pass
+ * 1 heuristics (always) + Pass 2 LLM refinement (when available), validates
  * the output, writes a versioned blob to R2 ({siteId}/v{n}.txt), inserts a
  * file_versions row, and marks the run done. Never throws on LLM failure —
  * falls back to the heuristic output.
@@ -39,13 +41,44 @@ export async function generate(
 ): Promise<GenerationResult> {
   const db = drizzle(env.DB);
 
+  const finishRun = async () => {
+    await db
+      .update(crawlRuns)
+      .set({ status: "done", finishedAt: Math.floor(Date.now() / 1000) })
+      .where(eq(crawlRuns.id, runId));
+  };
+
+  const existingGeneration = async (): Promise<GenerationResult | null> => {
+    const existing = await db
+      .select({ version: fileVersions.version, r2Key: fileVersions.r2Key })
+      .from(fileVersions)
+      .where(and(eq(fileVersions.siteId, siteId), eq(fileVersions.runId, runId)))
+      .get();
+    return existing ?? null;
+  };
+
   const site = await db.select().from(sites).where(eq(sites.id, siteId)).get();
   if (!site) throw new Error(`generate: site not found: ${siteId}`);
+
+  const alreadyPublished = await existingGeneration();
+  if (alreadyPublished) {
+    await finishRun();
+    return alreadyPublished;
+  }
+
+  const run = await db.select().from(crawlRuns).where(eq(crawlRuns.id, runId)).get();
+  if (!run) throw new Error(`generate: run not found: ${runId}`);
 
   const rows = await db
     .select()
     .from(pages)
-    .where(and(eq(pages.siteId, siteId), eq(pages.status, "active")))
+    .where(
+      and(
+        eq(pages.siteId, siteId),
+        eq(pages.status, "active"),
+        run.startedAt == null ? undefined : gte(pages.lastSeenAt, run.startedAt),
+      ),
+    )
     .all();
 
   const origin = site.domain;
@@ -78,6 +111,12 @@ export async function generate(
     console.warn("generate: LLM refinement failed, shipping pass 1", { siteId, err });
   }
 
+  const publishedDuringGeneration = await existingGeneration();
+  if (publishedDuringGeneration) {
+    await finishRun();
+    return publishedDuringGeneration;
+  }
+
   const latest = await db
     .select({ version: fileVersions.version })
     .from(fileVersions)
@@ -93,20 +132,26 @@ export async function generate(
   });
 
   const now = Math.floor(Date.now() / 1000);
-  await db.insert(fileVersions).values({
-    id: nanoid(12),
-    siteId,
-    runId,
-    version,
-    r2Key,
-    changeSummary: changeSummary ?? "initial generation",
-    createdAt: now,
-  });
+  try {
+    await db.insert(fileVersions).values({
+      id: nanoid(12),
+      siteId,
+      runId,
+      version,
+      r2Key,
+      changeSummary: changeSummary ?? "initial generation",
+      createdAt: now,
+    });
+  } catch (err) {
+    const publishedByDuplicate = await existingGeneration();
+    if (publishedByDuplicate) {
+      await finishRun();
+      return publishedByDuplicate;
+    }
+    throw err;
+  }
 
-  await db
-    .update(crawlRuns)
-    .set({ status: "done", finishedAt: now })
-    .where(eq(crawlRuns.id, runId));
+  await finishRun();
 
   return { version, r2Key };
 }

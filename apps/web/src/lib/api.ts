@@ -45,9 +45,15 @@ export function apiBaseUrl(): string {
   return process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8787";
 }
 
+export function normalizeWebsiteUrl(input: string): string {
+  const trimmed = input.trim();
+  if (/^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed)) return trimmed;
+  return `https://${trimmed}`;
+}
+
 /** The shareable hosted URL for a generated file. */
-export function hostedFileUrl(domain: string): string {
-  return `${apiBaseUrl()}/sites/${domain}/llms.txt`;
+export function hostedFileUrl(originOrDomain: string): string {
+  return `${apiBaseUrl()}/sites/${encodeURIComponent(originOrDomain)}/llms.txt`;
 }
 
 async function request<T>(
@@ -83,7 +89,7 @@ const httpClient: LlmsApi = {
   createSite: (url) =>
     request("/api/sites", (d) => createSiteResponseSchema.parse(d), {
       method: "POST",
-      body: JSON.stringify({ url }),
+      body: JSON.stringify({ url: normalizeWebsiteUrl(url) }),
     }),
   getSite: (siteId) => request(`/api/sites/${siteId}`, (d) => siteResponseSchema.parse(d)),
   getJob: (runId) => request(`/api/jobs/${runId}`, (d) => jobStatusResponseSchema.parse(d)),
@@ -93,7 +99,7 @@ const httpClient: LlmsApi = {
   getDiff: (siteId, from, to) =>
     request(`/api/sites/${siteId}/diff?from=${from}&to=${to}`, (d) => diffResponseSchema.parse(d)),
   setMonitoring: (siteId, enabled) =>
-    request(`/api/sites/${siteId}`, (d) => siteResponseSchema.parse(d), {
+    request(`/api/sites/${siteId}/monitoring`, (d) => siteResponseSchema.parse(d), {
       method: "PATCH",
       body: JSON.stringify({ enabled }),
     }),
@@ -123,7 +129,7 @@ async function resolveClient(): Promise<LlmsApi> {
 
 /** Module-level facade so callers can `import { api }` regardless of mode. */
 export const api: LlmsApi = {
-  createSite: async (url) => (await resolveClient()).createSite(url),
+  createSite: async (url) => (await resolveClient()).createSite(normalizeWebsiteUrl(url)),
   getSite: async (siteId) => (await resolveClient()).getSite(siteId),
   getJob: async (runId) => (await resolveClient()).getJob(runId),
   getVersions: async (siteId) => (await resolveClient()).getVersions(siteId),

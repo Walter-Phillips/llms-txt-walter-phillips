@@ -1,15 +1,92 @@
 import { Hono } from "hono";
+import type { Context } from "hono";
 import { drizzle } from "drizzle-orm/d1";
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { sites, fileVersions } from "@profound-takehome/db";
 import type { Env } from "../bindings";
+import { normalizeOrigin } from "../lib/url";
 
 export const filesRouter = new Hono<{ Bindings: Env }>();
 
+type SiteRow = typeof sites.$inferSelect;
+
+// ---------------------------------------------------------------------------
+// Shared version-history handlers — operate on an already-resolved site row.
+// Each router resolves its site (by id or by domain) then delegates here so
+// the listing/diff logic lives in exactly one place.
+// ---------------------------------------------------------------------------
+
+export async function listVersions(
+  c: Context<{ Bindings: Env }>,
+  db: ReturnType<typeof drizzle>,
+  site: SiteRow,
+) {
+  const versions = await db
+    .select()
+    .from(fileVersions)
+    .where(eq(fileVersions.siteId, site.id))
+    .orderBy(desc(fileVersions.version));
+  return c.json({ versions });
+}
+
+export async function computeDiff(
+  c: Context<{ Bindings: Env }>,
+  db: ReturnType<typeof drizzle>,
+  site: SiteRow,
+  from: number,
+  to: number,
+) {
+  const rows = await db
+    .select()
+    .from(fileVersions)
+    .where(and(eq(fileVersions.siteId, site.id), inArray(fileVersions.version, [from, to])));
+  const fromRow = rows.find((r) => r.version === from);
+  const toRow = rows.find((r) => r.version === to);
+  if (!fromRow || !toRow) return c.json({ error: "version_not_found" }, 404);
+
+  const [fromObj, toObj] = await Promise.all([
+    c.env.FILES.get(fromRow.r2Key),
+    c.env.FILES.get(toRow.r2Key),
+  ]);
+  if (!fromObj || !toObj) return c.json({ error: "file_missing" }, 500);
+
+  const [fromText, toText] = await Promise.all([fromObj.text(), toObj.text()]);
+  const diff = unifiedDiff(fromText, toText, `llms.txt v${from}`, `llms.txt v${to}`);
+  return c.json({ from, to, diff });
+}
+
+export function domainCandidates(param: string): string[] {
+  let decoded = param;
+  try {
+    decoded = decodeURIComponent(param);
+  } catch {
+    // Hono may already decode route params; keep the original value.
+  }
+
+  const candidates = new Set<string>();
+  const origin = normalizeOrigin(decoded);
+  if (origin) candidates.add(origin);
+  candidates.add(decoded);
+  if (!decoded.includes("://")) {
+    candidates.add(`https://${decoded}`);
+    candidates.add(`http://${decoded}`);
+  }
+  return [...candidates];
+}
+
+async function findSiteByDomainParam(db: ReturnType<typeof drizzle>, param: string): Promise<SiteRow | undefined> {
+  for (const candidate of domainCandidates(param)) {
+    const site = await db.select().from(sites).where(eq(sites.domain, candidate)).get();
+    if (site) return site;
+  }
+  return undefined;
+}
+
 // Public: GET /sites/:domain/llms.txt → latest file for a registered domain.
+// The domain segment may be an encoded origin, e.g. https%3A%2F%2Fexample.com.
 filesRouter.get("/:domain/llms.txt", async (c) => {
   const db = drizzle(c.env.DB);
-  const site = await db.select().from(sites).where(eq(sites.domain, c.req.param("domain"))).get();
+  const site = await findSiteByDomainParam(db, c.req.param("domain"));
   if (!site) return c.text("not found", 404);
 
   const latest = await db
@@ -35,14 +112,9 @@ filesRouter.get("/:domain/llms.txt", async (c) => {
 
 filesRouter.get("/:domain/versions", async (c) => {
   const db = drizzle(c.env.DB);
-  const site = await db.select().from(sites).where(eq(sites.domain, c.req.param("domain"))).get();
+  const site = await findSiteByDomainParam(db, c.req.param("domain"));
   if (!site) return c.json({ error: "not_found" }, 404);
-  const versions = await db
-    .select()
-    .from(fileVersions)
-    .where(eq(fileVersions.siteId, site.id))
-    .orderBy(desc(fileVersions.version));
-  return c.json({ versions });
+  return listVersions(c, db, site);
 });
 
 // GET /sites/:domain/versions/:v → raw file for one historical version.
@@ -51,7 +123,7 @@ filesRouter.get("/:domain/versions/:v", async (c) => {
   if (!Number.isInteger(version) || version < 1) return c.json({ error: "invalid_version" }, 400);
 
   const db = drizzle(c.env.DB);
-  const site = await db.select().from(sites).where(eq(sites.domain, c.req.param("domain"))).get();
+  const site = await findSiteByDomainParam(db, c.req.param("domain"));
   if (!site) return c.json({ error: "not_found" }, 404);
 
   const row = await db
@@ -82,26 +154,10 @@ filesRouter.get("/:domain/diff", async (c) => {
   }
 
   const db = drizzle(c.env.DB);
-  const site = await db.select().from(sites).where(eq(sites.domain, c.req.param("domain"))).get();
+  const site = await findSiteByDomainParam(db, c.req.param("domain"));
   if (!site) return c.json({ error: "not_found" }, 404);
 
-  const rows = await db
-    .select()
-    .from(fileVersions)
-    .where(and(eq(fileVersions.siteId, site.id), inArray(fileVersions.version, [from, to])));
-  const fromRow = rows.find((r) => r.version === from);
-  const toRow = rows.find((r) => r.version === to);
-  if (!fromRow || !toRow) return c.json({ error: "version_not_found" }, 404);
-
-  const [fromObj, toObj] = await Promise.all([
-    c.env.FILES.get(fromRow.r2Key),
-    c.env.FILES.get(toRow.r2Key),
-  ]);
-  if (!fromObj || !toObj) return c.json({ error: "file_missing" }, 500);
-
-  const [fromText, toText] = await Promise.all([fromObj.text(), toObj.text()]);
-  const diff = unifiedDiff(fromText, toText, `llms.txt v${from}`, `llms.txt v${to}`);
-  return c.json({ from, to, diff });
+  return computeDiff(c, db, site, from, to);
 });
 
 // ---------------------------------------------------------------------------

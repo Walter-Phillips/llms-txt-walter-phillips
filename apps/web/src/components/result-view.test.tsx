@@ -19,7 +19,7 @@ vi.mock("@/lib/api", async (importOriginal) => {
 
 const site: Site = {
   id: "site_acme-dev",
-  domain: "acme.dev",
+  domain: "https://acme.dev",
   displayName: "Acme",
   monitoring: 0,
   checkIntervalS: 21600,
@@ -39,7 +39,7 @@ beforeEach(() => {
       siteId: site.id,
       runId: "run_1",
       version: 3,
-      r2Key: "acme.dev/llms.txt/v3",
+      r2Key: "https://acme.dev/llms.txt/v3",
       changeSummary: "1 page added",
       createdAt: Date.now(),
     },
@@ -65,8 +65,11 @@ it("renders the file, version, and hosted URL", async () => {
   expect(await screen.findByText("# Acme")).toBeInTheDocument();
   expect(screen.getByText("Quickstart")).toBeInTheDocument(); // highlighted link label
   expect(screen.getByText(/v3/)).toBeInTheDocument();
+  expect(apiMock.getLlmsTxt).toHaveBeenCalledWith("https://acme.dev");
   expect(
-    screen.getByRole("link", { name: "http://localhost:8787/sites/acme.dev/llms.txt" }),
+    screen.getByRole("link", {
+      name: "http://localhost:8787/sites/https%3A%2F%2Facme.dev/llms.txt",
+    }),
   ).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "Copy" })).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "Download" })).toBeInTheDocument();
