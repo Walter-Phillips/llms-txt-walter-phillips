@@ -68,16 +68,17 @@ enforced.
 
 ## Commands you will need
 
-| Purpose   | Command                                              | Expected on success |
-|-----------|------------------------------------------------------|---------------------|
-| Typecheck | `pnpm --filter @profound-takehome/api typecheck`     | exit 0              |
-| Tests     | `pnpm --filter @profound-takehome/api test`          | all pass            |
-| Doc check | `pnpm check-docs`                                    | exit 0              |
-| Full gate | `pnpm verify`                                        | exit 0              |
+| Purpose   | Command                                          | Expected on success |
+| --------- | ------------------------------------------------ | ------------------- |
+| Typecheck | `pnpm --filter @profound-takehome/api typecheck` | exit 0              |
+| Tests     | `pnpm --filter @profound-takehome/api test`      | all pass            |
+| Doc check | `pnpm check-docs`                                | exit 0              |
+| Full gate | `pnpm verify`                                    | exit 0              |
 
 ## Scope
 
 **In scope**:
+
 - `docs/exec-plans/rate-limiting.md` (create) — the design note.
 - `apps/api/src/middleware/rate-limit.ts` (create) — a small, tested,
   **fail-open** limiter function + Hono middleware factory.
@@ -88,6 +89,7 @@ enforced.
   `wrangler.toml [vars]` entry). Do not turn it on.
 
 **Out of scope** (STOP if you find yourself here):
+
 - Adding auth, API keys, or user accounts (explicit Non-Goal).
 - Limiting the public read/file routes.
 - Turning the limiter on by default or in production config.
@@ -112,6 +114,7 @@ Create `docs/exec-plans/rate-limiting.md` per "Deliverables" item 1. Keep it to
 ### Step 2: Implement a fail-open limiter + tests
 
 Create `apps/api/src/middleware/rate-limit.ts`:
+
 - A pure-ish `checkRateLimit(kv, key, limit, windowS): Promise<{ allowed: boolean; remaining: number }>`
   using `kv.get`/`kv.put` with `expirationTtl`. On any thrown KV error, return
   `{ allowed: true, … }` (fail-open).
@@ -162,6 +165,7 @@ enabling.
 ## STOP conditions
 
 Stop and report back if:
+
 - Enforcing the limit by default seems necessary to make tests pass (it should
   not — keep it flag-gated).
 - The work starts pulling toward auth/API-keys (out of scope, Non-Goal).

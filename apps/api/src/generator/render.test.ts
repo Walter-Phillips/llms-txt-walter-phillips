@@ -19,16 +19,16 @@ const FIXTURE: Inventory = {
           title: "Docs",
           description: "Documentation home.",
           h1: null,
-          sectionHint: "Documentation",
+          sectionHint: "Documentation"
         },
         {
           url: `${ORIGIN}/docs/api`,
           title: null,
           description: null,
           h1: "API Reference",
-          sectionHint: "Documentation",
-        },
-      ],
+          sectionHint: "Documentation"
+        }
+      ]
     },
     {
       name: "Products",
@@ -38,10 +38,10 @@ const FIXTURE: Inventory = {
           title: "Pricing [2025] | Acme",
           description: null,
           h1: null,
-          sectionHint: "Products",
-        },
-      ],
-    },
+          sectionHint: "Products"
+        }
+      ]
+    }
   ],
   optional: [
     {
@@ -49,9 +49,9 @@ const FIXTURE: Inventory = {
       title: "Privacy",
       description: "Privacy policy.",
       h1: null,
-      sectionHint: "Optional",
-    },
-  ],
+      sectionHint: "Optional"
+    }
+  ]
 };
 
 describe("render", () => {
@@ -66,7 +66,9 @@ describe("render", () => {
 
   it("falls back to h1 for the title and synthesizes a description", () => {
     const out = render(FIXTURE, "s");
-    expect(out).toContain("- [API Reference](https://example.com/docs/api): API Reference (Documentation).");
+    expect(out).toContain(
+      "- [API Reference](https://example.com/docs/api): API Reference (Documentation)."
+    );
   });
 
   it("never emits a bare trailing colon", () => {
@@ -93,11 +95,25 @@ describe("render", () => {
         description: "Acme makes widgets.",
         h1: "Acme",
         snippet: null,
-        sectionHint: null,
+        sectionHint: null
       },
       // Bare page: no title/description anywhere — must still render a valid line.
-      { url: `${ORIGIN}/x/y`, title: null, description: null, h1: null, snippet: null, sectionHint: null },
-      { url: `${ORIGIN}/terms`, title: "Terms", description: null, h1: null, snippet: null, sectionHint: null },
+      {
+        url: `${ORIGIN}/x/y`,
+        title: null,
+        description: null,
+        h1: null,
+        snippet: null,
+        sectionHint: null
+      },
+      {
+        url: `${ORIGIN}/terms`,
+        title: "Terms",
+        description: null,
+        h1: null,
+        snippet: null,
+        sectionHint: null
+      }
     ];
     const inv = buildInventory(rows, ORIGIN);
     const out = render(inv, inv.homepageSnippet ?? `Key pages for ${inv.siteName}.`);

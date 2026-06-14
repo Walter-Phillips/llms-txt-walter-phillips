@@ -40,7 +40,7 @@ re-enqueueing a second `generate` message. Generation is idempotent by `runId`
 (`generator/index.ts:63-67`), so no corrupt file results — but the progress
 counter shown to users (`api/jobs.ts` proxies `pagesCrawled`) is wrong and the
 extra work is wasteful. The fix makes the counter and drain signal depend on
-whether the URL was *actually* in `inFlight`.
+whether the URL was _actually_ in `inFlight`.
 
 ## Current state
 
@@ -90,21 +90,23 @@ if (completion.drained) { /* mark generating + send generate message */ }
 
 ## Commands you will need
 
-| Purpose   | Command                                                          | Expected on success |
-|-----------|------------------------------------------------------------------|---------------------|
-| Typecheck | `pnpm --filter @profound-takehome/api typecheck`                 | exit 0              |
-| Tests     | `pnpm --filter @profound-takehome/api test -- site-coordinator`  | all pass            |
-| Full gate | `pnpm verify`                                                    | exit 0              |
+| Purpose   | Command                                                         | Expected on success |
+| --------- | --------------------------------------------------------------- | ------------------- |
+| Typecheck | `pnpm --filter @profound-takehome/api typecheck`                | exit 0              |
+| Tests     | `pnpm --filter @profound-takehome/api test -- site-coordinator` | all pass            |
+| Full gate | `pnpm verify`                                                   | exit 0              |
 
 ## Scope
 
 **In scope** (the only files you should modify):
+
 - `apps/api/src/do/site-coordinator.ts` — guard the increment on actual removal.
   (If plan 003 extracted an `applyComplete` pure helper, make the change there.)
 - `apps/api/src/do/site-coordinator.test.ts` — flip the characterization test to
   assert idempotency; add a dedicated double-complete test.
 
 **Out of scope** (do NOT touch):
+
 - `apps/api/src/queue/crawl-consumer.ts` — do **not** restructure the caller's
   try/catch ordering. The DO is the correct place to be idempotent (the queue
   contract is at-least-once; the DO is the single serialized authority).
@@ -145,6 +147,7 @@ not break the "single URL completes → drained" test.)
 ### Step 2: Update the tests to assert idempotency
 
 In `apps/api/src/do/site-coordinator.test.ts`:
+
 - Find the characterization test that pins the double-count (added by plan 003,
   marked with a comment referencing plan 004). Change it to assert that calling
   `complete` **twice for the same URL** leaves `pagesCrawled === 1`.

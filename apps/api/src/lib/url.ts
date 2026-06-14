@@ -57,7 +57,10 @@ export function isBlockedHost(hostname: string): boolean {
 function toDottedQuad(host: string): string | null {
   let value: number;
   if (/^\d+$/.test(host)) {
-    value = host.length > 1 && host.startsWith("0") ? Number.parseInt(host, 8) : Number.parseInt(host, 10);
+    value =
+      host.length > 1 && host.startsWith("0")
+        ? Number.parseInt(host, 8)
+        : Number.parseInt(host, 10);
   } else if (/^0x[0-9a-f]+$/i.test(host)) {
     value = Number.parseInt(host.slice(2), 16);
   } else {

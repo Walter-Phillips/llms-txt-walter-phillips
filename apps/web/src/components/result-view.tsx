@@ -77,7 +77,8 @@ export function ResultView({ siteId }: { siteId: string }) {
 
   const hosted = hostedFileUrl(site.domain);
   const monitoringOn = site.monitoring === 1;
-  const generatedByLabel = generatedBy === "llm-refined" ? "AI-refined" : generatedBy === "heuristic" ? "Heuristic" : null;
+  const generatedByLabel =
+    generatedBy === "llm-refined" ? "AI-refined" : generatedBy === "heuristic" ? "Heuristic" : null;
 
   return (
     <div className="grid gap-8 lg:grid-cols-[1fr_280px]">

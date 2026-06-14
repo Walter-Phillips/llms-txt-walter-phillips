@@ -9,7 +9,7 @@ const METHODS = [
   "getPages",
   "getDiff",
   "setMonitoring",
-  "getLlmsTxt",
+  "getLlmsTxt"
 ] as const;
 
 describe("mock API simulation", () => {

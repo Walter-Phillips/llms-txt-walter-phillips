@@ -8,8 +8,8 @@ const { apiMock } = vi.hoisted(() => ({
     getSite: vi.fn(),
     getLlmsTxt: vi.fn(),
     setMonitoring: vi.fn(),
-    getPages: vi.fn(),
-  },
+    getPages: vi.fn()
+  }
 }));
 
 vi.mock("@/lib/api", async (importOriginal) => {
@@ -25,7 +25,7 @@ const site: Site = {
   checkIntervalS: 21600,
   nextCheckAt: null,
   changeStreak: 0,
-  createdAt: Date.now(),
+  createdAt: Date.now()
 };
 
 const CONTENT = `# Acme\n\n> Acme builds developer tooling.\n\n## Docs\n\n- [Quickstart](https://acme.dev/docs/quickstart): Ship fast\n`;
@@ -41,8 +41,8 @@ beforeEach(() => {
       version: 3,
       r2Key: "https://acme.dev/llms.txt/v3",
       changeSummary: "1 page added",
-      createdAt: Date.now(),
-    },
+      createdAt: Date.now()
+    }
   });
   apiMock.getLlmsTxt.mockReset().mockResolvedValue(CONTENT);
   apiMock.setMonitoring.mockReset();
@@ -53,9 +53,9 @@ beforeEach(() => {
         title: "Quickstart",
         description: null,
         sectionHint: "Docs",
-        status: "ok",
-      },
-    ],
+        status: "ok"
+      }
+    ]
   });
 });
 
@@ -68,8 +68,8 @@ it("renders the file, version, and hosted URL", async () => {
   expect(apiMock.getLlmsTxt).toHaveBeenCalledWith("https://acme.dev");
   expect(
     screen.getByRole("link", {
-      name: "http://localhost:8787/sites/https%3A%2F%2Facme.dev/llms.txt",
-    }),
+      name: "http://localhost:8787/sites/https%3A%2F%2Facme.dev/llms.txt"
+    })
   ).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "Copy" })).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "Download" })).toBeInTheDocument();
@@ -78,7 +78,7 @@ it("renders the file, version, and hosted URL", async () => {
 it("toggles monitoring and shows the cadence", async () => {
   apiMock.setMonitoring.mockResolvedValue({
     site: { ...site, monitoring: 1, nextCheckAt: Date.now() + 21600 * 1000 },
-    latestVersion: null,
+    latestVersion: null
   });
   render(<ResultView siteId={site.id} />);
 

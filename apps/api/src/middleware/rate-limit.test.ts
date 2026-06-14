@@ -13,7 +13,7 @@ function fakeKv(opts: { throws?: boolean } = {}): KVNamespace {
     put: async (key: string, value: string) => {
       if (opts.throws) throw new Error("kv unavailable");
       map.set(key, value);
-    },
+    }
   } as unknown as KVNamespace;
 }
 
@@ -39,7 +39,7 @@ describe("checkRateLimit", () => {
   it("fails open when KV throws", async () => {
     await expect(checkRateLimit(fakeKv({ throws: true }), "k", 1, 60)).resolves.toEqual({
       allowed: true,
-      remaining: 1,
+      remaining: 1
     });
   });
 });

@@ -12,10 +12,11 @@ const PATH_BLOCKLIST = [
   /^\/cart/i,
   /^\/wp-admin/i,
   /\/page\/[3-9]\d*/i,
-  /\/(?:tag|category)\/.+\/page\//i,
+  /\/(?:tag|category)\/.+\/page\//i
 ];
 
-const NON_HTML_EXTENSION = /\.(png|jpe?g|gif|svg|webp|ico|css|js|mjs|json|xml|pdf|zip|gz|mp[34]|webm|woff2?|ttf|eot|txt)$/i;
+const NON_HTML_EXTENSION =
+  /\.(png|jpe?g|gif|svg|webp|ico|css|js|mjs|json|xml|pdf|zip|gz|mp[34]|webm|woff2?|ttf|eot|txt)$/i;
 
 export function shouldCrawl(path: string, disallow: string[]): boolean {
   if (PATH_BLOCKLIST.some((rx) => rx.test(path))) return false;

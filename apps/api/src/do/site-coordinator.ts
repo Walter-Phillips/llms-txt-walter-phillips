@@ -32,7 +32,7 @@ const IDLE_STATE: State = {
   inFlight: [],
   seen: [],
   depths: {},
-  capped: false,
+  capped: false
 };
 
 export type ClaimRequest = {
@@ -108,7 +108,7 @@ export class SiteCoordinator extends DurableObject<Env> {
       origin: body.origin,
       disallow: body.disallow,
       discoveryMethod: body.discoveryMethod,
-      followLinks: body.followLinks,
+      followLinks: body.followLinks
     };
     await this.save();
     return Response.json({ ok: true });
@@ -129,7 +129,7 @@ export class SiteCoordinator extends DurableObject<Env> {
         drained: false,
         pagesFound: 0,
         pagesCrawled: 0,
-        capped: false,
+        capped: false
       } satisfies CompleteResponse);
     }
 
@@ -152,7 +152,7 @@ export class SiteCoordinator extends DurableObject<Env> {
       drained,
       pagesFound: this.state.pagesFound,
       pagesCrawled: this.state.pagesCrawled,
-      capped: this.state.capped,
+      capped: this.state.capped
     } satisfies CompleteResponse);
   }
 
@@ -164,7 +164,11 @@ export class SiteCoordinator extends DurableObject<Env> {
     return Response.json({ ok: true });
   }
 
-  private admit(candidates: string[], baseUrl: string, depth: number): { url: string; depth: number }[] {
+  private admit(
+    candidates: string[],
+    baseUrl: string,
+    depth: number
+  ): { url: string; depth: number }[] {
     const seen = new Set(this.state.seen);
     const pageBudget = Math.max(0, MAX_PAGES - this.state.pagesFound);
     const urls = acceptUrls({
@@ -173,7 +177,7 @@ export class SiteCoordinator extends DurableObject<Env> {
       origin: this.state.origin ?? "",
       seen,
       disallow: this.state.disallow,
-      pageBudget,
+      pageBudget
     });
     if (
       (pageBudget === 0 && candidates.length > 0) ||
@@ -198,7 +202,7 @@ export class SiteCoordinator extends DurableObject<Env> {
       pagesCrawled: this.state.pagesCrawled,
       discoveryMethod: this.state.discoveryMethod,
       frontierSize: this.state.inFlight.length,
-      inFlight: this.state.inFlight.length,
+      inFlight: this.state.inFlight.length
     };
   }
 }

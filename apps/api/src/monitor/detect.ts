@@ -77,7 +77,7 @@ export type StoredValidators = {
  */
 export function classifyConditionalGet(
   res: ConditionalResponse,
-  stored: StoredValidators,
+  stored: StoredValidators
 ): ConditionalOutcome {
   if (res.status === 304) return "unchanged";
   if (res.status === 404 || res.status === 410) return "removed";
@@ -147,6 +147,6 @@ export function buildChangeSet(inputs: DetectionInputs): ChangeSet {
   return {
     added: [...added].sort(),
     removed: [...removed].sort(),
-    modified: [...modified].sort(),
+    modified: [...modified].sort()
   };
 }

@@ -43,13 +43,13 @@ export async function extract(body: ReadableStream<Uint8Array>): Promise<Extract
       text(t) {
         title.text(t);
         if (t.lastInTextNode) title.done = true;
-      },
+      }
     })
     .on("h1", {
       text(t) {
         h1.text(t);
         if (t.lastInTextNode) h1.done = true;
-      },
+      }
     })
     .on("meta", {
       element(el) {
@@ -60,14 +60,14 @@ export async function extract(body: ReadableStream<Uint8Array>): Promise<Extract
         if (name === "description" && description === null) description = content;
         else if (property === "og:title" && ogTitle === null) ogTitle = content;
         else if (property === "og:description" && ogDescription === null) ogDescription = content;
-      },
+      }
     })
     .on("a", {
       element(el) {
         if (links.length >= MAX_LINKS) return;
         const href = el.getAttribute("href");
         if (href) links.push(href);
-      },
+      }
     })
     .on("p", {
       element(el) {
@@ -84,7 +84,7 @@ export async function extract(body: ReadableStream<Uint8Array>): Promise<Extract
       },
       text(t) {
         if (inP && snippet === null) currentP += t.text;
-      },
+      }
     });
 
   // Drive the stream through the rewriter to completion.
@@ -95,7 +95,7 @@ export async function extract(body: ReadableStream<Uint8Array>): Promise<Extract
   const cleanDescription = description ?? ogDescription;
 
   const contentHash = await sha256(
-    [cleanTitle ?? "", cleanDescription ?? "", cleanH1 ?? "", snippet ?? ""].join("\n"),
+    [cleanTitle ?? "", cleanDescription ?? "", cleanH1 ?? "", snippet ?? ""].join("\n")
   );
 
   return {
@@ -104,7 +104,7 @@ export async function extract(body: ReadableStream<Uint8Array>): Promise<Extract
     h1: cleanH1,
     snippet,
     contentHash,
-    links,
+    links
   };
 }
 

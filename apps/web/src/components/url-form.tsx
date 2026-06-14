@@ -62,7 +62,11 @@ export function UrlForm() {
           onChange={(e) => setUrl(e.target.value)}
           className="min-w-0 flex-1 bg-transparent px-3 text-base outline-none placeholder:text-ink-soft/60"
         />
-        <Button type="submit" disabled={submitting || !url.trim()} className="shrink-0 rounded-none bg-ink font-mono text-paper hover:bg-accent">
+        <Button
+          type="submit"
+          disabled={submitting || !url.trim()}
+          className="shrink-0 rounded-none bg-ink font-mono text-paper hover:bg-accent"
+        >
           {submitting ? "Pressing…" : "Generate"}
         </Button>
       </form>

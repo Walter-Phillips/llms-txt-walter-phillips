@@ -10,7 +10,7 @@ import {
   type JobStatusResponse,
   type PagesResponse,
   type SiteResponse,
-  type VersionsResponse,
+  type VersionsResponse
 } from "@profound-takehome/shared";
 
 /**
@@ -59,13 +59,13 @@ export function hostedFileUrl(originOrDomain: string): string {
 async function request<T>(
   path: string,
   parse: (data: unknown) => T,
-  init?: RequestInit,
+  init?: RequestInit
 ): Promise<T> {
   let res: Response;
   try {
     res = await fetch(`${apiBaseUrl()}${path}`, {
       headers: { "content-type": "application/json" },
-      ...init,
+      ...init
     });
   } catch {
     throw new ApiRequestError(0, "Could not reach the API. Is the Worker running?");
@@ -89,7 +89,7 @@ const httpClient: LlmsApi = {
   createSite: (url) =>
     request("/api/sites", (d) => createSiteResponseSchema.parse(d), {
       method: "POST",
-      body: JSON.stringify({ url: normalizeWebsiteUrl(url) }),
+      body: JSON.stringify({ url: normalizeWebsiteUrl(url) })
     }),
   getSite: (siteId) => request(`/api/sites/${siteId}`, (d) => siteResponseSchema.parse(d)),
   getJob: (runId) => request(`/api/jobs/${runId}`, (d) => jobStatusResponseSchema.parse(d)),
@@ -101,13 +101,13 @@ const httpClient: LlmsApi = {
   setMonitoring: (siteId, enabled) =>
     request(`/api/sites/${siteId}/monitoring`, (d) => siteResponseSchema.parse(d), {
       method: "PATCH",
-      body: JSON.stringify({ enabled }),
+      body: JSON.stringify({ enabled })
     }),
   getLlmsTxt: async (domain) => {
     const res = await fetch(hostedFileUrl(domain));
     if (!res.ok) throw new ApiRequestError(res.status, `File not found (${res.status})`);
     return res.text();
-  },
+  }
 };
 
 export function isMockMode(): boolean {
@@ -136,5 +136,5 @@ export const api: LlmsApi = {
   getPages: async (siteId) => (await resolveClient()).getPages(siteId),
   getDiff: async (siteId, from, to) => (await resolveClient()).getDiff(siteId, from, to),
   setMonitoring: async (siteId, enabled) => (await resolveClient()).setMonitoring(siteId, enabled),
-  getLlmsTxt: async (domain) => (await resolveClient()).getLlmsTxt(domain),
+  getLlmsTxt: async (domain) => (await resolveClient()).getLlmsTxt(domain)
 };

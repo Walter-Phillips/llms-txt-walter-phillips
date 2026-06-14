@@ -6,14 +6,14 @@ Source of truth for the system design and what's built vs. outstanding. Updated 
 
 **Phase status:**
 
-| Phase | Scope | Status |
-| --- | --- | --- |
-| 0 | Workspace pivot to CF Workers, schema, scaffolding | ✅ done |
-| 1 | Crawl core (discovery cascade, extraction, DO frontier) | ✅ done |
-| 2 | Generation pipeline + UI happy path | ✅ done |
-| 3 | LLM refinement + UI polish | ✅ done |
-| 4 | Monitoring (detection, cadence, history UI) | ✅ done |
-| 5 | Ship — see `phase-5-ship.md` | ⏳ in progress |
+| Phase | Scope                                                   | Status         |
+| ----- | ------------------------------------------------------- | -------------- |
+| 0     | Workspace pivot to CF Workers, schema, scaffolding      | ✅ done        |
+| 1     | Crawl core (discovery cascade, extraction, DO frontier) | ✅ done        |
+| 2     | Generation pipeline + UI happy path                     | ✅ done        |
+| 3     | LLM refinement + UI polish                              | ✅ done        |
+| 4     | Monitoring (detection, cadence, history UI)             | ✅ done        |
+| 5     | Ship — see `phase-5-ship.md`                            | ⏳ in progress |
 
 ---
 
@@ -34,21 +34,25 @@ Source of truth for the system design and what's built vs. outstanding. Updated 
 Per llmstxt.org, the file is Markdown at `/llms.txt` with sections in strict order:
 
 ```markdown
-# Site Name                          ← H1, required (only required section)
-> One-paragraph summary              ← blockquote, key context
+# Site Name ← H1, required (only required section)
+
+> One-paragraph summary ← blockquote, key context
 
 Free-form detail paragraphs (no headings).
 
-## Section Name                      ← H2 groups of curated links
+## Section Name ← H2 groups of curated links
+
 - [Page Title](https://url): one-line description
 
-## Optional                          ← skippable, secondary content
+## Optional ← skippable, secondary content
+
 - [Page Title](https://url): description
 ```
 
 Generation rules we enforce:
+
 - H1 = site name (homepage title with suffix-stripping → domain fallback)
-- Blockquote = LLM-written summary of what the site *is*, grounded in crawled content
+- Blockquote = LLM-written summary of what the site _is_, grounded in crawled content
 - H2 sections named the way a user would ask for things ("Documentation", "Products", "Blog") — not how the site files them
 - Every link: absolute URL, human title, one-line description
 - Low-value pages (legal, careers, archived posts) demoted to `## Optional`
@@ -97,16 +101,16 @@ The validator (`apps/api/src/generator/validate.ts`) checks our own output again
 
 ### Component responsibilities
 
-| Component | Role |
-| --- | --- |
-| **Worker (Hono)** | API surface, hosts `/sites/:domain/llms.txt`, enqueues jobs |
-| **crawl-queue** | One message per page fetch. Keeps each invocation small, gives retries + DLQ |
+| Component              | Role                                                                                       |
+| ---------------------- | ------------------------------------------------------------------------------------------ |
+| **Worker (Hono)**      | API surface, hosts `/sites/:domain/llms.txt`, enqueues jobs                                |
+| **crawl-queue**        | One message per page fetch. Keeps each invocation small, gives retries + DLQ               |
 | **SiteCoordinator DO** | One per registered domain. URL frontier, dedupe, page/depth caps, live progress, run mutex |
-| **D1** | System of record: sites, pages (with hash/etag/lastmod), crawl runs, file versions |
-| **R2** | Versioned llms.txt blobs (cheap, immutable history → diff UI) |
-| **Cron Trigger** | `*/15 * * * *` → query D1 for due monitored sites → enqueue monitor jobs |
-| **Anthropic API** | Pass-2 refinement: summary, section naming/ordering, link descriptions, Optional demotion |
-| **Next.js (Vercel)** | Pure presentation. Polls API for progress; renders result/history/diff |
+| **D1**                 | System of record: sites, pages (with hash/etag/lastmod), crawl runs, file versions         |
+| **R2**                 | Versioned llms.txt blobs (cheap, immutable history → diff UI)                              |
+| **Cron Trigger**       | `*/15 * * * *` → query D1 for due monitored sites → enqueue monitor jobs                   |
+| **Anthropic API**      | Pass-2 refinement: summary, section naming/ordering, link descriptions, Optional demotion  |
+| **Next.js (Vercel)**   | Pure presentation. Polls API for progress; renders result/history/diff                     |
 
 ---
 
@@ -125,37 +129,46 @@ Indexes: `sites(monitoring, next_check_at)` for the cron sweep; `pages(site_id, 
 
 ## 5. Crawler — Discovery Cascade
 
-### 5.1 Stage 0: Validate & normalize  *(built — `lib/url.ts`)*
+### 5.1 Stage 0: Validate & normalize _(built — `lib/url.ts`)_
+
 - Resolve input to an origin (`https://example.com`), reject non-http(s) schemes, localhost, private IPs, link-local (SSRF guard).
 
-### 5.2 Stage 1: robots.txt  *(built — `crawler/robots.ts`)*
+### 5.2 Stage 1: robots.txt _(built — `crawler/robots.ts`)_
+
 - Fetch `/robots.txt`. Extract `Sitemap:`, `Disallow:` (UA-specific + `*`), `Crawl-delay:`. Missing/malformed → polite defaults.
 
-### 5.3 Stage 2: Sitemaps  *(built — `crawler/sitemap.ts`)*
+### 5.3 Stage 2: Sitemaps _(built — `crawler/sitemap.ts`)_
+
 - Fetch declared sitemaps + conventional fallbacks (`/sitemap.xml`, `/sitemap_index.xml`).
 - Sitemap-index files handled recursively (cap: 10 child sitemaps).
 - `<loc>` + `<lastmod>` extracted; lastmod persisted on the page row for monitoring.
 - Candidate URLs capped (default 1,000), prioritizing shallow paths.
 
-### 5.4 Stage 3: BFS link crawl  *(built — `crawler/frontier.ts` + page consumer link extraction)*
+### 5.4 Stage 3: BFS link crawl _(built — `crawler/frontier.ts` + page consumer link extraction)_
+
 Triggered when sitemap yields fewer than 3 URLs (constant in `crawl-consumer.ts`).
+
 - Root, same-origin only, max depth 3, page cap 1,000.
 - URL normalization: strip fragments, tracking params, trailing-slash canonicalization, lowercased host.
 - Path blocklist: `/search`, `/login`, `/cart`, `/wp-admin`, deep pagination.
 - Respects robots disallow.
 
-### 5.5 Stage 4: Rendered fetch (SPA fallback)  *(deferred)*
+### 5.5 Stage 4: Rendered fetch (SPA fallback) _(deferred)_
+
 - Empty-shell detection (body text < ~200 chars) would trigger Browser Rendering for root + top-N routes.
 - Dropped from MVP scope — risk/budget vs. demo value didn't favor it. Heuristic + LLM output is already strong for the vast majority of sites.
 
-### 5.6 Per-page extraction  *(built — `crawler/extract.ts`)*
+### 5.6 Per-page extraction _(built — `crawler/extract.ts`)_
+
 HTMLRewriter streaming pipeline:
+
 - `<title>`, `meta[name=description]`, `og:title/description/site_name`, `link[rel=canonical]`, first `<h1>`, first substantive `<p>`
 - **Content hash** = sha-256 over title + description + h1 + snippet (NOT raw HTML — boilerplate would churn hashes on every fetch)
 - Outbound link extraction (same-origin) feeds the BFS frontier
 - Captures response `ETag` / `Last-Modified` headers
 
-### 5.7 Politeness & robustness  *(built — `crawler/fetcher.ts`)*
+### 5.7 Politeness & robustness _(built — `crawler/fetcher.ts`)_
+
 - 10 s timeout via `AbortSignal.timeout`
 - 2 MB body cap (declared `content-length` short-circuit; streaming reader caps over-the-wire)
 - Honest UA: `llms-txt-generator/1.0 (+https://llms-txt.example.com/about)`
@@ -163,7 +176,8 @@ HTMLRewriter streaming pipeline:
 - Per-domain stagger: page messages enqueued with `delaySeconds = floor(i / 4)` instead of a separate scheduler
 - Queue retries + DLQ handle 429/503 transients
 
-### 5.8 Crawl orchestration flow  *(built)*
+### 5.8 Crawl orchestration flow _(built)_
+
 1. `POST /api/sites` → upsert site row, insert run row → enqueue `{type: "discover"}` → return `runId` immediately.
 2. Discover consumer: robots → sitemap → claim run on the DO (mutex check) → seed frontier → enqueue one `page` message per accepted URL.
 3. Page consumer: conditional fetch → extract → hash → upsert into `pages` → report `complete` to the DO; the DO appends any newly-discovered same-origin links to the frontier (depth-capped).
@@ -175,7 +189,8 @@ HTMLRewriter streaming pipeline:
 
 ## 6. Generation Pipeline
 
-### 6.1 Pass 1 — Deterministic structuring  *(built — `generator/heuristics.ts`)*
+### 6.1 Pass 1 — Deterministic structuring _(built — `generator/heuristics.ts`)_
+
 Classify every page into a candidate section by path heuristics (`/docs|/guide|/api|/reference` → Documentation, `/blog|/news` → Blog, `/pricing|/products|/features` → Products, `/about|/team|/contact` → About, fallthrough → Core Pages, legal/careers → Optional).
 
 Within a section: rank by depth (shallower first), then metadata richness (title + description beats bare URL), then URL for determinism. Cap at 10 per section; overflow → Optional.
@@ -184,16 +199,20 @@ Homepage represented by H1 + blockquote, never as a link. Site name resolved fro
 
 **Pass 1 output alone is already a valid llms.txt.**
 
-### 6.2 Pass 2 — LLM refinement  *(built — `generator/llm.ts`)*
+### 6.2 Pass 2 — LLM refinement _(built — `generator/llm.ts`)_
+
 Anthropic Claude (Sonnet) with forced tool use for structured output.
+
 - Input: structured JSON inventory (site name, homepage snippet, sections, page titles/descriptions/paths). Pages capped at 1,000; long fields truncated.
 - Tool schema (zod-validated): `{ summary, sections: [{ name, pages: [{ url, description }] }], optional: [...] }`.
 - Output sanitized: summary trimmed to 400 chars, section names 80, descriptions 200.
 - **URL allow-list:** any URL the model returns that isn't in the input inventory is silently dropped during mapping. Hallucination is structurally impossible.
 - Failure (network, schema validation, sanitization rejecting too many fields) → caller falls back to Pass 1 output. The validator (§6.3) gates everything before R2 write either way.
 
-### 6.3 Validator  *(built — `generator/validate.ts`)*
+### 6.3 Validator _(built — `generator/validate.ts`)_
+
 Pure function, unit-tested. Checks:
+
 - Exactly one H1, on line 1
 - Blockquote present
 - No H3+ at top level
@@ -203,7 +222,8 @@ Pure function, unit-tested. Checks:
 
 Runs on every generated file before it's written to R2. If the LLM-refined output fails validation, we fall back to Pass 1 and revalidate.
 
-### 6.4 Output  *(built — `api/files.ts` + generate consumer)*
+### 6.4 Output _(built — `api/files.ts` + generate consumer)_
+
 - Versioned R2 write at `{siteId}/v{n}.txt`; `file_versions` row inserted with a change summary.
 - Latest served at `GET /sites/:domain/llms.txt` with `text/markdown` content-type and `cache-control: public, max-age=300`.
 - A site owner can reverse-proxy this path from their own domain.
@@ -212,7 +232,8 @@ Runs on every generated file before it's written to R2. If the LLM-refined outpu
 
 ## 7. Monitoring & Automated Updates
 
-### 7.1 Layered change detection  *(built — `monitor/detect.ts`)*
+### 7.1 Layered change detection _(built — `monitor/detect.ts`)_
+
 Each layer is a **pure function over caller-provided inputs** — the consumer owns I/O, the detect module owns logic. Trivial to unit-test.
 
 1. **Sitemap diff** — `diffSitemap(stored, current)` returns `{ added, removed, lastmodChanged }`. One request.
@@ -221,19 +242,22 @@ Each layer is a **pure function over caller-provided inputs** — the consumer o
 
 `buildChangeSet(inputs)` folds all three layers into one `ChangeSet`. Dedupe: `added > removed > modified`; `error` outcomes are dropped (transient failures never trigger regeneration or page removal).
 
-### 7.2 What counts as a change worth regenerating  *(built — `isRegenerationWorthy`)*
+### 7.2 What counts as a change worth regenerating _(built — `isRegenerationWorthy`)_
+
 - Page added, removed, or content-hash-modified
 - Threshold: any structural change OR ≥1 metadata change → regenerate
 - Pure body-text drift with identical metadata → record, don't regenerate (the file links and describes pages; it doesn't embed body text)
 
-### 7.3 Adaptive cadence  *(built — `monitor/schedule.ts`)*
+### 7.3 Adaptive cadence _(built — `monitor/schedule.ts`)_
+
 - **Priors at registration:** news sitemap or RSS feed → 6 h; dated URL patterns / `/blog/` heavy → 12 h; default → 24 h; tiny brochure site → 72 h.
 - **Feedback loop:** each check updates `change_streak`:
   - changes found → `interval = max(interval / 2, 1 h)`
   - no changes → `interval = min(interval * 1.5, 7 d)`
 - `next_check_at = now + interval` always advances, even on quiet checks, so the cron sweep stays predictable.
 
-### 7.4 Scheduling mechanics  *(built — `monitor/schedule.ts` cron entry + `queue/monitor-consumer.ts`)*
+### 7.4 Scheduling mechanics _(built — `monitor/schedule.ts` cron entry + `queue/monitor-consumer.ts`)_
+
 - Cron every 15 min → `SELECT id FROM sites WHERE monitoring=1 AND next_check_at <= ?` (capped at 100) → batch send to monitor-queue.
 - Monitor consumer runs §7.1. If regeneration warranted, kicks off a `monitor`-triggered crawl run; otherwise just updates `next_check_at` and the streak. Hard cap of 30 conditional GETs per check.
 - Per-site mutual exclusion via the SiteCoordinator DO mutex (no overlapping runs).
@@ -251,17 +275,18 @@ GET    /sites/:domain/versions                       → version list + change s
 ```
 
 Routes:
+
 - `apps/api/src/api/sites.ts` — registration + dedupe (re-registering an existing domain returns the existing site id)
 - `apps/api/src/api/jobs.ts` — proxies DO live state for active runs, D1 row otherwise
 - `apps/api/src/api/files.ts` — public file serving + version listing
 
 CORS enabled on `/api/*` for the Vercel-hosted UI.
 
-Rate limiting via KV counter on `POST /api/sites` is wired through the `RATE_LIMIT` binding — *not yet enforced in the handler*. **Phase-5 todo.**
+Rate limiting via KV counter on `POST /api/sites` is wired through the `RATE_LIMIT` binding — _not yet enforced in the handler_. **Phase-5 todo.**
 
 ---
 
-## 9. UI / User Journey  *(built — `apps/web/`)*
+## 9. UI / User Journey _(built — `apps/web/`)_
 
 Single-page-style Next.js app. Observer-first, zero auth.
 
@@ -269,7 +294,7 @@ Single-page-style Next.js app. Observer-first, zero auth.
 2. **Site page (`/sites/[siteId]`)** — drives the whole post-submit flow via `components/site-screen.tsx`:
    - **Progress** (`progress-view.tsx`) — live phase indicator polling `/api/jobs/:runId` via `lib/use-job-status.ts`. Shows discovery method ("Found sitemap with 64 URLs" vs. "No sitemap — crawling links") and pages crawled/N.
    - **Result** (`result-view.tsx`) — rendered llms.txt (`llms-text.tsx`), copy/download buttons (`copy-button.tsx`), stable hosted URL, page-inventory table (`page-inventory.tsx`).
-   - **History** (`history-view.tsx`) — version timeline with change summaries; click any two → unified diff view (`diff-view.tsx`, logic in `lib/diff.ts`). *Demo money-shot for monitoring.*
+   - **History** (`history-view.tsx`) — version timeline with change summaries; click any two → unified diff view (`diff-view.tsx`, logic in `lib/diff.ts`). _Demo money-shot for monitoring._
 
 The `NEXT_PUBLIC_API_MOCK=1` env flag swaps in `lib/mock-api.ts` so the UI can be developed and demoed without a live backend. URLs whose hostname contains "error" exercise the failure path.
 
@@ -304,39 +329,39 @@ docs/
 
 ## 11. Implementation Phases
 
-**Phase 0 — Workspace pivot** *(done)*
+**Phase 0 — Workspace pivot** _(done)_
 Switched apps/api from Node Hono to Cloudflare Workers. Added wrangler.toml with D1/R2/KV/Queues/DO bindings, drizzle schema + migration, module skeleton, docs.
 
-**Phase 1 — Crawl core** *(done)*
+**Phase 1 — Crawl core** _(done)_
 robots/sitemap/frontier/fetcher/extract modules with unit tests. SiteCoordinator DO with claim/seed/complete/finish RPCs. Crawl consumer (`discover` → `page` → drain → enqueue `generate`). End-to-end: paste a sitemap'd docs site → pages land in D1.
 
-**Phase 2 — Generation + minimal UI** *(done)*
+**Phase 2 — Generation + minimal UI** _(done)_
 Pass-1 heuristics + renderer + spec validator. R2 versioned writes. Hosted `/sites/:domain/llms.txt`. Landing → progress → result page wired to the Worker.
 
-**Phase 3 — LLM refinement + polish** *(done)*
+**Phase 3 — LLM refinement + polish** _(done)_
 Anthropic structured-output call with strict URL allow-listing, validator-gated, heuristic fallback on any failure. Page-inventory table, copy/download, mock API for demo/dev, friendly error states.
 
-*Browser Rendering SPA fallback dropped from MVP — see §5.5.*
+_Browser Rendering SPA fallback dropped from MVP — see §5.5._
 
-**Phase 4 — Monitoring** *(done)*
+**Phase 4 — Monitoring** _(done)_
 Layered detection (sitemap-diff → conditional-GET → content-hash) as pure functions. Adaptive cadence + cron sweep. Monitor consumer kicks off monitor-triggered crawl runs when changes warrant it. Version timeline + diff view in the UI.
 
-**Phase 5 — Ship** *(in progress, see `phase-5-ship.md`)*
+**Phase 5 — Ship** _(in progress, see `phase-5-ship.md`)_
 Provision CF resources, deploy, smoke-test, demo video, README polish, repo + collaborators.
 
 ---
 
 ## 12. Risks & Mitigations
 
-| Risk | Mitigation | Where it lives |
-| --- | --- | --- |
-| Worker CPU limits on big pages | HTMLRewriter streaming, 2 MB cap, one page per queue message | `crawler/extract.ts`, `crawler/fetcher.ts` |
-| Sites blocking bot UA (403) | Honest UA + clear error surfaced to user (no UA spoofing) | `crawler/fetcher.ts` + `progress-view` error states |
-| Sitemap lies (stale/bumped lastmod) | Content hash is the truth; lastmod is only a prioritization hint | `monitor/detect.ts` |
-| LLM hallucinating URLs/sections | URL allow-list at output mapping; validator gates output; heuristic fallback | `generator/llm.ts`, `generator/validate.ts` |
-| Queue consumer storms a domain | DO frontier + per-message `delaySeconds` stagger | `do/site-coordinator.ts`, `queue/crawl-consumer.ts` |
-| Duplicate concurrent runs per site | DO mutex via `/claim` (409 if another run is in flight); domain dedupe at registration | `do/site-coordinator.ts`, `api/sites.ts` |
-| Infinite URL spaces (calendars, facets) | Page cap, depth cap, param stripping, path blocklists | `crawler/frontier.ts`, `lib/url.ts` |
+| Risk                                    | Mitigation                                                                             | Where it lives                                      |
+| --------------------------------------- | -------------------------------------------------------------------------------------- | --------------------------------------------------- |
+| Worker CPU limits on big pages          | HTMLRewriter streaming, 2 MB cap, one page per queue message                           | `crawler/extract.ts`, `crawler/fetcher.ts`          |
+| Sites blocking bot UA (403)             | Honest UA + clear error surfaced to user (no UA spoofing)                              | `crawler/fetcher.ts` + `progress-view` error states |
+| Sitemap lies (stale/bumped lastmod)     | Content hash is the truth; lastmod is only a prioritization hint                       | `monitor/detect.ts`                                 |
+| LLM hallucinating URLs/sections         | URL allow-list at output mapping; validator gates output; heuristic fallback           | `generator/llm.ts`, `generator/validate.ts`         |
+| Queue consumer storms a domain          | DO frontier + per-message `delaySeconds` stagger                                       | `do/site-coordinator.ts`, `queue/crawl-consumer.ts` |
+| Duplicate concurrent runs per site      | DO mutex via `/claim` (409 if another run is in flight); domain dedupe at registration | `do/site-coordinator.ts`, `api/sites.ts`            |
+| Infinite URL spaces (calendars, facets) | Page cap, depth cap, param stripping, path blocklists                                  | `crawler/frontier.ts`, `lib/url.ts`                 |
 
 ---
 

@@ -27,7 +27,7 @@ The web app ships two implementations of the `LlmsApi` interface: the real
 `httpClient` (`apps/web/src/lib/api.ts`) and the in-memory `mockClient`
 (`apps/web/src/lib/mock-api.ts`, 320 LOC) used for demos and E2E. Mock mode
 (`NEXT_PUBLIC_API_MOCK=1`) drives the entire UI and the Playwright suite. Both
-already implement the `LlmsApi` interface, so a *signature* change is caught —
+already implement the `LlmsApi` interface, so a _signature_ change is caught —
 but the risk this closes is subtler: it's easy to add a method to `LlmsApi` and
 `httpClient` and forget the mock, or vice-versa, if either is ever typed loosely.
 A one-line `satisfies` assertion makes "these two clients are interchangeable" a
@@ -67,7 +67,7 @@ export const mockClient: LlmsApi = { … };
 ```
 
 Both are annotated `: LlmsApi` today, so the interface is the shared contract.
-What's missing is a guard that the *response schema types themselves* line up —
+What's missing is a guard that the _response schema types themselves_ line up —
 i.e. that both return the exact `*Response` types from `@profound-takehome/shared`
 and that no method is wider on one side. A `satisfies typeof httpClient` on the
 mock (and a tiny test) makes the relationship explicit and self-documenting.
@@ -78,21 +78,23 @@ Conventions: the web package uses vitest (`apps/web/src/lib/api.test.ts`,
 
 ## Commands you will need
 
-| Purpose   | Command                                              | Expected on success |
-|-----------|------------------------------------------------------|---------------------|
-| Typecheck | `pnpm --filter @profound-takehome/web typecheck`     | exit 0              |
-| Tests     | `pnpm --filter @profound-takehome/web test`          | all pass            |
-| Full gate | `pnpm verify`                                        | exit 0              |
+| Purpose   | Command                                          | Expected on success |
+| --------- | ------------------------------------------------ | ------------------- |
+| Typecheck | `pnpm --filter @profound-takehome/web typecheck` | exit 0              |
+| Tests     | `pnpm --filter @profound-takehome/web test`      | all pass            |
+| Full gate | `pnpm verify`                                    | exit 0              |
 
 ## Scope
 
 **In scope** (the only files you should modify):
+
 - `apps/web/src/lib/mock-api.ts` — add a compile-time `satisfies` assertion
   binding `mockClient` to the shape of the real client.
 - `apps/web/src/lib/mock-api.test.ts` — add a test that both clients expose the
   same method-name set (a runtime backstop for the compile-time guard).
 
 **Out of scope** (do NOT touch):
+
 - `apps/web/src/lib/api.ts` — the contract source; do not change `LlmsApi` or
   `httpClient`.
 - `@profound-takehome/shared` schemas — unchanged.
@@ -110,7 +112,7 @@ Conventions: the web package uses vitest (`apps/web/src/lib/api.test.ts`,
 ### Step 1: Add the compile-time assertion to the mock
 
 At the bottom of `apps/web/src/lib/mock-api.ts`, after `mockClient` is defined,
-add a type-only assertion. Importing the real client's *type* (not its value, to
+add a type-only assertion. Importing the real client's _type_ (not its value, to
 avoid bundling the HTTP client into mock mode) is cleanest via a `typeof` on a
 type import. Since `httpClient` is not exported, assert both directions against
 the shared `LlmsApi` interface plus an explicit structural equality helper:
@@ -146,8 +148,14 @@ mock has a function for each:
 import { mockClient } from "./mock-api";
 
 const METHODS = [
-  "createSite", "getSite", "getJob", "getVersions",
-  "getPages", "getDiff", "setMonitoring", "getLlmsTxt",
+  "createSite",
+  "getSite",
+  "getJob",
+  "getVersions",
+  "getPages",
+  "getDiff",
+  "setMonitoring",
+  "getLlmsTxt"
 ] as const;
 
 it("mock client implements every LlmsApi method", () => {
@@ -206,8 +214,8 @@ Stop and report back (do not improvise) if:
 
 ## Maintenance notes
 
-- This guard only proves the two clients are *type-compatible*. It does not
-  prove the mock's *behavior* matches the server's. Behavioral parity is still a
+- This guard only proves the two clients are _type-compatible_. It does not
+  prove the mock's _behavior_ matches the server's. Behavioral parity is still a
   manual/E2E concern — note it in review when response shapes change.
 - If a new API method is added, the compile-time guard forces the mock to
   implement it; the runtime list in the test must be updated too (keep them in

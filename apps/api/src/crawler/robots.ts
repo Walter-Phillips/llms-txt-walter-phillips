@@ -13,7 +13,7 @@ const MAX_DELAY_MS = 10_000;
 export const DEFAULT_RULES: RobotsRules = {
   disallow: [],
   crawlDelayMs: DEFAULT_DELAY_MS,
-  sitemaps: [],
+  sitemaps: []
 };
 
 export function parseRobots(text: string): RobotsRules {
@@ -62,7 +62,7 @@ export function parseRobots(text: string): RobotsRules {
       delayS === undefined
         ? DEFAULT_DELAY_MS
         : Math.min(Math.max(delayS * 1000, DEFAULT_DELAY_MS), MAX_DELAY_MS),
-    sitemaps,
+    sitemaps
   };
 }
 

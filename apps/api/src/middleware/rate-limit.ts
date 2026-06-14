@@ -10,7 +10,7 @@ export async function checkRateLimit(
   kv: KVNamespace,
   key: string,
   limit: number,
-  windowS: number,
+  windowS: number
 ): Promise<RateLimitResult> {
   try {
     const raw = await kv.get(key);

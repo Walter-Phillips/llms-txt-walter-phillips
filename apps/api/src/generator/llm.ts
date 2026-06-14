@@ -31,18 +31,18 @@ const MAX_DESCRIPTION_CHARS = 200;
 
 const llmPageSchema = z.object({
   url: z.string(),
-  description: z.string().nullish(),
+  description: z.string().nullish()
 });
 
 const llmSectionSchema = z.object({
   name: z.string(),
-  pages: z.array(llmPageSchema),
+  pages: z.array(llmPageSchema)
 });
 
 const llmResponseSchema = z.object({
   summary: z.string(),
   sections: z.array(llmSectionSchema),
-  optional: z.array(llmPageSchema).default([]),
+  optional: z.array(llmPageSchema).default([])
 });
 
 type LlmResponse = z.infer<typeof llmResponseSchema>;
@@ -55,7 +55,7 @@ const TOOL_INPUT_SCHEMA = {
     summary: {
       type: "string",
       description:
-        "1-2 sentence description of what the site IS, grounded only in the provided inventory. No marketing fluff, no speculation.",
+        "1-2 sentence description of what the site IS, grounded only in the provided inventory. No marketing fluff, no speculation."
     },
     sections: {
       type: "array",
@@ -72,35 +72,34 @@ const TOOL_INPUT_SCHEMA = {
               properties: {
                 url: {
                   type: "string",
-                  description: "Must be copied verbatim from the inventory. Never invent URLs.",
+                  description: "Must be copied verbatim from the inventory. Never invent URLs."
                 },
                 description: {
                   type: "string",
-                  description: "One-line description of the page (under 200 chars).",
-                },
+                  description: "One-line description of the page (under 200 chars)."
+                }
               },
-              required: ["url"],
-            },
-          },
+              required: ["url"]
+            }
+          }
         },
-        required: ["name", "pages"],
-      },
+        required: ["name", "pages"]
+      }
     },
     optional: {
       type: "array",
-      description:
-        "Low-value pages (legal, careers, boilerplate) demoted to the Optional section.",
+      description: "Low-value pages (legal, careers, boilerplate) demoted to the Optional section.",
       items: {
         type: "object",
         properties: {
           url: { type: "string" },
-          description: { type: "string" },
+          description: { type: "string" }
         },
-        required: ["url"],
-      },
-    },
+        required: ["url"]
+      }
+    }
   },
-  required: ["summary", "sections", "optional"],
+  required: ["summary", "sections", "optional"]
 };
 
 // ---------------------------------------------------------------------------
@@ -122,11 +121,11 @@ function buildAnthropicCaller(apiKey: string): ToolCaller {
           name: TOOL_NAME,
           description:
             "Emit the refined llms.txt plan: summary, renamed/reordered sections, per-page descriptions, and demotions to optional.",
-          input_schema: TOOL_INPUT_SCHEMA,
-        },
+          input_schema: TOOL_INPUT_SCHEMA
+        }
       ],
       tool_choice: { type: "tool", name: TOOL_NAME },
-      messages: [{ role: "user", content: prompt }],
+      messages: [{ role: "user", content: prompt }]
     });
     const toolUse = message.content.find((block) => block.type === "tool_use");
     return toolUse && toolUse.type === "tool_use" ? toolUse.input : null;
@@ -135,7 +134,7 @@ function buildAnthropicCaller(apiKey: string): ToolCaller {
 
 export async function refine(
   inventory: Inventory,
-  apiKey: string,
+  apiKey: string
 ): Promise<{ summary: string; inventory: Inventory } | null> {
   if (!apiKey || !apiKey.trim()) return null;
   return refineWithCaller(inventory, buildAnthropicCaller(apiKey));
@@ -147,7 +146,7 @@ export async function refine(
  */
 export async function refineWithCaller(
   inventory: Inventory,
-  callTool: ToolCaller,
+  callTool: ToolCaller
 ): Promise<{ summary: string; inventory: Inventory } | null> {
   try {
     const raw = await callTool(buildPrompt(inventory));
@@ -175,7 +174,7 @@ function promptPage(page: InventoryPage) {
     url: page.url,
     title: truncate(page.title, MAX_FIELD_CHARS),
     description: truncate(page.description, MAX_FIELD_CHARS),
-    h1: truncate(page.h1, MAX_FIELD_CHARS),
+    h1: truncate(page.h1, MAX_FIELD_CHARS)
   };
 }
 
@@ -195,7 +194,7 @@ function buildPrompt(inventory: Inventory): string {
     origin: inventory.origin,
     homepageSnippet: truncate(inventory.homepageSnippet, MAX_SNIPPET_CHARS),
     sections,
-    optional,
+    optional
   };
 
   return [
@@ -213,7 +212,7 @@ function buildPrompt(inventory: Inventory): string {
     "- Do not drop pages; if unsure where a page belongs, keep it in a section close to its current one.",
     "",
     "Inventory (JSON):",
-    JSON.stringify(payload, null, 2),
+    JSON.stringify(payload, null, 2)
   ].join("\n");
 }
 
@@ -227,7 +226,7 @@ function sanitizeLine(value: string | null | undefined, max: number): string | n
 
 function mapResponse(
   original: Inventory,
-  response: LlmResponse,
+  response: LlmResponse
 ): { summary: string; inventory: Inventory } | null {
   const summary = sanitizeLine(response.summary, MAX_SUMMARY_CHARS);
   if (!summary) return null;
@@ -316,15 +315,15 @@ function mapResponse(
       origin: original.origin,
       homepageSnippet: original.homepageSnippet,
       sections: outSections,
-      optional: outOptional,
-    },
+      optional: outOptional
+    }
   };
 }
 
 /** Output section index where most pages of `section` ended up, or null. */
 function majorityDestination(
   section: SectionInventory,
-  outSectionOf: Map<string, number>,
+  outSectionOf: Map<string, number>
 ): number | null {
   const votes = new Map<number, number>();
   for (const page of section.pages) {

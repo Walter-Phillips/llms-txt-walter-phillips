@@ -25,7 +25,7 @@ describe("acceptUrls", () => {
     origin: "https://example.com",
     seen: new Set<string>(),
     disallow: [] as string[],
-    pageBudget: 100,
+    pageBudget: 100
   };
 
   it("resolves relative links, filters cross-origin, dedupes", () => {
@@ -37,8 +37,8 @@ describe("acceptUrls", () => {
         "https://other.com/x",
         "/a#frag",
         "/a?utm_source=tw",
-        "mailto:x@example.com",
-      ],
+        "mailto:x@example.com"
+      ]
     });
     expect(accepted).toEqual(["https://example.com/a", "https://example.com/docs/intro"]);
   });
@@ -48,7 +48,7 @@ describe("acceptUrls", () => {
       ...base,
       seen: new Set(["https://example.com/a"]),
       pageBudget: 1,
-      candidates: ["/a", "/b", "/c"],
+      candidates: ["/a", "/b", "/c"]
     });
     expect(accepted).toEqual(["https://example.com/b"]);
   });
@@ -57,7 +57,7 @@ describe("acceptUrls", () => {
     const accepted = acceptUrls({
       ...base,
       disallow: ["/private"],
-      candidates: ["/private/x", "/ok"],
+      candidates: ["/private/x", "/ok"]
     });
     expect(accepted).toEqual(["https://example.com/ok"]);
   });

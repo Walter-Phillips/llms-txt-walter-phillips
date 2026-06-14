@@ -9,8 +9,8 @@ export default function Home() {
             /llms.txt — one file, machine-readable
           </p>
           <h1 className="rise rise-1 mt-4 font-display text-5xl leading-[1.05] tracking-tight md:text-6xl">
-            Set your website in{" "}
-            <em className="text-accent">plain text</em>, for the machines that read it.
+            Set your website in <em className="text-accent">plain text</em>, for the machines that
+            read it.
           </h1>
           <p className="rise rise-2 mt-6 max-w-xl text-sm leading-relaxed text-ink-soft">
             llms.txt is a proposed standard: a single markdown file at{" "}

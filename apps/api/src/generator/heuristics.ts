@@ -1,10 +1,6 @@
 import type { Inventory, InventoryPage, SectionInventory } from "@profound-takehome/shared";
 
-export type {
-  InventoryPage,
-  SectionInventory,
-  Inventory,
-} from "@profound-takehome/shared";
+export type { InventoryPage, SectionInventory, Inventory } from "@profound-takehome/shared";
 
 /** Subset of a D1 `pages` row the heuristics need. Pure-data input. */
 export type PageRow = {
@@ -19,13 +15,20 @@ export type PageRow = {
 export const MAX_LINKS_PER_SECTION = 10;
 
 const RULES: Array<{ rx: RegExp; section: string; optional?: boolean }> = [
-  { rx: /^\/(docs|documentation|guide|guides|api|reference|developers?|sdk)/i, section: "Documentation" },
+  {
+    rx: /^\/(docs|documentation|guide|guides|api|reference|developers?|sdk)/i,
+    section: "Documentation"
+  },
   { rx: /^\/(blog|news|articles|posts|changelog|releases)/i, section: "Blog" },
   { rx: /^\/\d{4}\/\d{2}\//, section: "Blog" },
   { rx: /^\/(pricing|plans|products?|features|solutions|integrations)/i, section: "Products" },
   { rx: /^\/(about|team|contact|company|customers|case-studies)/i, section: "About" },
   { rx: /^\/(support|help|faq)/i, section: "Documentation" },
-  { rx: /^\/(legal|privacy|terms|cookies|careers|jobs|press|media)/i, section: "Optional", optional: true },
+  {
+    rx: /^\/(legal|privacy|terms|cookies|careers|jobs|press|media)/i,
+    section: "Optional",
+    optional: true
+  }
 ];
 
 // Pass 1: deterministic classify. Pass 2 (LLM) renames/reorders sections.
@@ -113,7 +116,7 @@ function toInventoryPage(row: PageRow, section: string): InventoryPage {
     title: row.title?.trim() || null,
     description: row.description?.trim() || row.snippet?.trim() || null,
     h1: row.h1?.trim() || null,
-    sectionHint: row.sectionHint?.trim() || section,
+    sectionHint: row.sectionHint?.trim() || section
   };
 }
 
@@ -164,6 +167,6 @@ export function buildInventory(rows: PageRow[], origin: string): Inventory {
     origin,
     homepageSnippet,
     sections,
-    optional: rankPages(optionalRows).map((r) => toInventoryPage(r, "Optional")),
+    optional: rankPages(optionalRows).map((r) => toInventoryPage(r, "Optional"))
   };
 }

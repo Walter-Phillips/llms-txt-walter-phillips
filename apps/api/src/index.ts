@@ -12,7 +12,7 @@ export default {
   async queue(
     batch: MessageBatch<CrawlMessage | MonitorMessage>,
     env: Env,
-    ctx: ExecutionContext,
+    ctx: ExecutionContext
   ): Promise<void> {
     if (batch.queue === "crawl-queue") {
       await handleCrawlBatch(batch as MessageBatch<CrawlMessage>, env, ctx);
@@ -21,7 +21,11 @@ export default {
     }
   },
 
-  async scheduled(_controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
+  async scheduled(
+    _controller: ScheduledController,
+    env: Env,
+    ctx: ExecutionContext
+  ): Promise<void> {
     ctx.waitUntil(enqueueDueMonitorJobs(env));
-  },
+  }
 } satisfies ExportedHandler<Env, CrawlMessage | MonitorMessage>;

@@ -9,14 +9,14 @@ const DIFF = [
   " # Acme",
   "-- [Old page](https://acme.dev/old)",
   "+- [New page](https://acme.dev/new)",
-  " ## Docs",
+  " ## Docs"
 ].join("\n");
 
 it("colors added, removed, hunk, and context lines distinctly", () => {
   render(<DiffView diff={DIFF} />);
   const view = screen.getByTestId("diff-view");
   const kinds = Array.from(view.querySelectorAll("[data-diff-line]")).map((el) =>
-    el.getAttribute("data-diff-line"),
+    el.getAttribute("data-diff-line")
   );
   expect(kinds).toEqual(["meta", "meta", "hunk", "ctx", "del", "add", "ctx"]);
 

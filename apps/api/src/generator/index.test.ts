@@ -6,11 +6,11 @@ import { generate } from "./index";
 import { createTestEnv, FakeDb } from "../test-helpers";
 
 vi.mock("drizzle-orm/d1", () => ({
-  drizzle: vi.fn((db) => db),
+  drizzle: vi.fn((db) => db)
 }));
 
 vi.mock("./llm", () => ({
-  refine: vi.fn(),
+  refine: vi.fn()
 }));
 
 const site = {
@@ -20,7 +20,7 @@ const site = {
   checkIntervalS: 86400,
   nextCheckAt: null,
   changeStreak: 0,
-  createdAt: 1,
+  createdAt: 1
 };
 
 const run = {
@@ -32,7 +32,7 @@ const run = {
   pagesCrawled: 2,
   pagesChanged: 0,
   startedAt: 100,
-  finishedAt: null,
+  finishedAt: null
 };
 
 const pageRows = [
@@ -46,7 +46,7 @@ const pageRows = [
     snippet: null,
     sectionHint: null,
     status: "active",
-    lastSeenAt: 120,
+    lastSeenAt: 120
   },
   {
     id: "page_docs",
@@ -58,8 +58,8 @@ const pageRows = [
     snippet: null,
     sectionHint: null,
     status: "active",
-    lastSeenAt: 120,
-  },
+    lastSeenAt: 120
+  }
 ];
 
 function queueFreshGeneration(db: FakeDb, latest: { version: number } | undefined = undefined) {
@@ -95,8 +95,8 @@ describe("generate", () => {
     expect(db.updates).toEqual([
       {
         table: "crawlRuns",
-        values: { status: "done", finishedAt: expect.any(Number) },
-      },
+        values: { status: "done", finishedAt: expect.any(Number) }
+      }
     ]);
   });
 
@@ -111,11 +111,9 @@ describe("generate", () => {
 
     expect(result).toEqual({ version: 1, r2Key: "site_1/v1.txt" });
     expect(put).toHaveBeenCalledTimes(1);
-    expect(put).toHaveBeenCalledWith(
-      "site_1/v1.txt",
-      expect.stringContaining("## Documentation"),
-      { httpMetadata: { contentType: "text/plain; charset=utf-8" } },
-    );
+    expect(put).toHaveBeenCalledWith("site_1/v1.txt", expect.stringContaining("## Documentation"), {
+      httpMetadata: { contentType: "text/plain; charset=utf-8" }
+    });
     expect(db.inserts).toEqual([
       {
         table: "fileVersions",
@@ -125,9 +123,9 @@ describe("generate", () => {
           version: 1,
           r2Key: "site_1/v1.txt",
           changeSummary: "initial generation",
-          generatedBy: "heuristic",
-        }),
-      },
+          generatedBy: "heuristic"
+        })
+      }
     ]);
   });
 
@@ -149,8 +147,8 @@ describe("generate", () => {
         runId: run.id,
         version: 1,
         r2Key: "site_1/v1.txt",
-        generatedBy: "heuristic",
-      },
+        generatedBy: "heuristic"
+      }
     });
   });
 
@@ -168,16 +166,16 @@ describe("generate", () => {
               title: "Developer Docs",
               description: "Refined developer documentation.",
               h1: "Docs",
-              sectionHint: "For Developers",
-            },
-          ],
-        },
+              sectionHint: "For Developers"
+            }
+          ]
+        }
       ],
-      optional: [],
+      optional: []
     };
     vi.mocked(refine).mockResolvedValue({
       inventory: refinedInventory,
-      summary: "Refined summary.",
+      summary: "Refined summary."
     });
     const db = new FakeDb();
     queueFreshGeneration(db);
@@ -193,7 +191,7 @@ describe("generate", () => {
     expect(content).not.toContain("## Documentation");
     expect(db.inserts[0]).toMatchObject({
       table: "fileVersions",
-      values: { generatedBy: "llm-refined" },
+      values: { generatedBy: "llm-refined" }
     });
   });
 
@@ -206,14 +204,12 @@ describe("generate", () => {
     const result = await generate(env, site.id, run.id);
 
     expect(result).toEqual({ version: 3, r2Key: "site_1/v3.txt" });
-    expect(put).toHaveBeenCalledWith(
-      "site_1/v3.txt",
-      expect.any(String),
-      { httpMetadata: { contentType: "text/plain; charset=utf-8" } },
-    );
+    expect(put).toHaveBeenCalledWith("site_1/v3.txt", expect.any(String), {
+      httpMetadata: { contentType: "text/plain; charset=utf-8" }
+    });
     expect(db.inserts[0]).toMatchObject({
       table: "fileVersions",
-      values: { siteId: site.id, runId: run.id, version: 3, r2Key: "site_1/v3.txt" },
+      values: { siteId: site.id, runId: run.id, version: 3, r2Key: "site_1/v3.txt" }
     });
   });
 });

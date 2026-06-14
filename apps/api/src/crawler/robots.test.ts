@@ -5,8 +5,8 @@ describe("parseRobots", () => {
   it("extracts sitemap directives regardless of group", () => {
     const rules = parseRobots(
       ["User-agent: *", "Disallow: /admin", "", "Sitemap: https://example.com/sitemap.xml"].join(
-        "\n",
-      ),
+        "\n"
+      )
     );
     expect(rules.sitemaps).toEqual(["https://example.com/sitemap.xml"]);
     expect(rules.disallow).toEqual(["/admin"]);
@@ -19,16 +19,14 @@ describe("parseRobots", () => {
         "Disallow: /everything",
         "",
         "User-agent: llms-txt-generator",
-        "Disallow: /private",
-      ].join("\n"),
+        "Disallow: /private"
+      ].join("\n")
     );
     expect(rules.disallow).toEqual(["/private"]);
   });
 
   it("applies shared rules to consecutive user-agent lines", () => {
-    const rules = parseRobots(
-      ["User-agent: foo", "User-agent: *", "Disallow: /shared"].join("\n"),
-    );
+    const rules = parseRobots(["User-agent: foo", "User-agent: *", "Disallow: /shared"].join("\n"));
     expect(rules.disallow).toEqual(["/shared"]);
   });
 
@@ -40,7 +38,7 @@ describe("parseRobots", () => {
 
   it("ignores comments and malformed lines", () => {
     const rules = parseRobots(
-      ["# a comment", "User-agent: *", "Disallow: /a # trailing", "nonsense line"].join("\n"),
+      ["# a comment", "User-agent: *", "Disallow: /a # trailing", "nonsense line"].join("\n")
     );
     expect(rules.disallow).toEqual(["/a"]);
   });

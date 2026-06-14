@@ -49,19 +49,20 @@ every future `audit` run noisy enough that real findings get ignored.
 
 ## Commands you will need
 
-| Purpose          | Command                                              | Expected on success            |
-|------------------|------------------------------------------------------|--------------------------------|
-| Audit (before)   | `pnpm audit --prod`                                  | shows the drizzle-orm HIGH     |
-| Upgrade          | `pnpm --filter @profound-takehome/api --filter @profound-takehome/db up drizzle-orm@latest` | resolves to ≥0.45.2 |
-| Audit (after)    | `pnpm audit --prod`                                  | drizzle-orm HIGH gone          |
-| Typecheck (all)  | `pnpm typecheck`                                     | exit 0, no errors              |
-| Tests (all)      | `pnpm test`                                          | all pass                       |
-| Lint             | `pnpm lint`                                          | exit 0                         |
-| Full gate        | `pnpm verify`                                        | exit 0                         |
+| Purpose         | Command                                                                                     | Expected on success        |
+| --------------- | ------------------------------------------------------------------------------------------- | -------------------------- |
+| Audit (before)  | `pnpm audit --prod`                                                                         | shows the drizzle-orm HIGH |
+| Upgrade         | `pnpm --filter @profound-takehome/api --filter @profound-takehome/db up drizzle-orm@latest` | resolves to ≥0.45.2        |
+| Audit (after)   | `pnpm audit --prod`                                                                         | drizzle-orm HIGH gone      |
+| Typecheck (all) | `pnpm typecheck`                                                                            | exit 0, no errors          |
+| Tests (all)     | `pnpm test`                                                                                 | all pass                   |
+| Lint            | `pnpm lint`                                                                                 | exit 0                     |
+| Full gate       | `pnpm verify`                                                                               | exit 0                     |
 
 ## Scope
 
 **In scope** (the only files you should modify):
+
 - `apps/api/package.json` — bump `drizzle-orm`
 - `packages/db/package.json` — bump `drizzle-orm` (keep the two in lockstep)
 - `pnpm-lock.yaml` — updated by `pnpm up` (do not hand-edit)
@@ -69,12 +70,13 @@ every future `audit` run noisy enough that real findings get ignored.
   **only if** the upgrade produces type/test errors (see Step 3).
 
 **Out of scope** (do NOT touch, even though they look related):
+
 - `drizzle-kit` major upgrades and migration **regeneration** — do not run
   `drizzle-kit generate`/`push`. Existing migrations in `packages/db/migrations/`
   are hand-maintained and must not be rewritten by this plan.
 - `vitest`, `next`, `postcss`, or any other audit advisory — separate concerns.
 - The D1 schema shape (`schema.ts` table/column definitions) — only adjust if
-  the new drizzle version *requires* a syntactic change to compile.
+  the new drizzle version _requires_ a syntactic change to compile.
 
 ## Git workflow
 
@@ -111,12 +113,13 @@ Run `pnpm typecheck`. Drizzle minor bumps occasionally tighten types around
 `.get()`/`.all()`, `onConflictDoUpdate`, or `sql` helpers. If errors appear,
 fix them **minimally** at the call site to satisfy the new types — do not
 refactor. The files most likely to surface changes:
+
 - `packages/db/src/schema.ts` (index/column builder API)
 - `apps/api/src/generator/index.ts`, `apps/api/src/api/files.ts`,
   `apps/api/src/queue/*.ts` (query builder + `onConflictDoUpdate` usage)
 
 If a breaking change requires touching more than ~3 files or changing a query's
-*behavior* (not just its types), STOP and report.
+_behavior_ (not just its types), STOP and report.
 
 **Verify**: `pnpm typecheck` → exit 0.
 

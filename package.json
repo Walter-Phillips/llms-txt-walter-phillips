@@ -5,15 +5,18 @@
   "scripts": {
     "dev": "turbo dev",
     "build": "turbo build",
+    "format": "prettier . --write --ignore-unknown",
+    "format:check": "prettier . --check --ignore-unknown",
     "lint": "turbo lint",
     "typecheck": "turbo typecheck",
     "test": "turbo test",
     "check-docs": "python3 scripts/check_harness.py",
     "check-architecture": "python3 scripts/check_harness.py",
-    "verify": "pnpm lint && pnpm typecheck && pnpm test && pnpm check-docs"
+    "verify": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm check-docs"
   },
   "devDependencies": {
     "eslint": "^9.0.0",
+    "prettier": "^3.8.4",
     "turbo": "^2.3.0",
     "typescript": "^5.7.0"
   },

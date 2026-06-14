@@ -21,13 +21,18 @@ function decodeXmlEntities(s: string): string {
 }
 
 function cleanXmlText(s: string): string {
-  return decodeXmlEntities(s.trim().replace(/^<!\[CDATA\[([\s\S]*?)\]\]>$/i, "$1").trim());
+  return decodeXmlEntities(
+    s
+      .trim()
+      .replace(/^<!\[CDATA\[([\s\S]*?)\]\]>$/i, "$1")
+      .trim()
+  );
 }
 
 function matchElementText(fragment: string, localName: string): string | undefined {
   const rx = new RegExp(
     `<(?:[\\w.-]+:)?${localName}\\b[^>]*>\\s*([\\s\\S]*?)\\s*<\\/(?:[\\w.-]+:)?${localName}>`,
-    "i",
+    "i"
   );
   const match = fragment.match(rx)?.[1];
   return match === undefined ? undefined : cleanXmlText(match);
@@ -56,7 +61,8 @@ function parseRssEntries(xml: string): SitemapEntry[] {
   for (const block of xml.matchAll(/<item\b[^>]*>([\s\S]*?)<\/item>/gi)) {
     const loc = matchElementText(block[1]!, "link") ?? matchElementText(block[1]!, "guid");
     if (!loc) continue;
-    const lastmod = matchElementText(block[1]!, "lastmod") ?? matchElementText(block[1]!, "pubDate");
+    const lastmod =
+      matchElementText(block[1]!, "lastmod") ?? matchElementText(block[1]!, "pubDate");
     entries.push({ url: loc, ...(lastmod ? { lastmod } : {}) });
   }
   return entries;
@@ -75,7 +81,8 @@ function parseAtomEntries(xml: string): SitemapEntry[] {
       if (rel?.toLowerCase() === "alternate") break;
     }
     if (!loc) continue;
-    const lastmod = matchElementText(block[1]!, "updated") ?? matchElementText(block[1]!, "modified");
+    const lastmod =
+      matchElementText(block[1]!, "updated") ?? matchElementText(block[1]!, "modified");
     entries.push({ url: loc, ...(lastmod ? { lastmod } : {}) });
   }
   return entries;
@@ -122,7 +129,7 @@ export function prioritizeShallow(entries: SitemapEntry[], cap = MAX_SITEMAP_URL
       (a, b) =>
         urlPathDepth(a.url) - urlPathDepth(b.url) ||
         a.url.length - b.url.length ||
-        (a.url < b.url ? -1 : 1),
+        (a.url < b.url ? -1 : 1)
     )
     .slice(0, cap);
 }
@@ -151,7 +158,7 @@ export type SitemapDiscoveryOptions = {
 export async function discoverSitemapEntries(
   origin: string,
   declared: string[],
-  options: SitemapDiscoveryOptions = {},
+  options: SitemapDiscoveryOptions = {}
 ): Promise<SitemapDiscovery> {
   const maxUrls = options.maxUrls ?? MAX_SITEMAP_URLS;
   const state: DiscoveryState = {
@@ -162,7 +169,7 @@ export async function discoverSitemapEntries(
     isNews: false,
     fetches: 0,
     maxFetches: options.maxFetches ?? DEFAULT_MAX_SITEMAP_FETCHES,
-    rawCandidateLimit: maxUrls * 3,
+    rawCandidateLimit: maxUrls * 3
   };
 
   await drainSitemapQueue([...declared], state);
@@ -172,12 +179,16 @@ export async function discoverSitemapEntries(
   // not already fetched. The sitemap fetch budget is shared across passes.
   if (state.entries.length === 0 && options.includeConventionalFallbacks !== false) {
     const conventional = [`${origin}/sitemap.xml`, `${origin}/sitemap_index.xml`].filter(
-      (u) => !state.visited.has(u),
+      (u) => !state.visited.has(u)
     );
     await drainSitemapQueue(conventional, state);
   }
 
-  return { entries: prioritizeShallow(state.entries, maxUrls), isNews: state.isNews, found: state.found };
+  return {
+    entries: prioritizeShallow(state.entries, maxUrls),
+    isNews: state.isNews,
+    found: state.found
+  };
 }
 
 type DiscoveryState = {
@@ -212,7 +223,7 @@ async function drainSitemapQueue(seed: string[], state: DiscoveryState): Promise
       bodyText = await readSitemapText(url, {
         body: res.body,
         contentType: res.contentType,
-        contentEncoding: res.contentEncoding,
+        contentEncoding: res.contentEncoding
       });
     } catch {
       continue;
@@ -237,7 +248,11 @@ async function drainSitemapQueue(seed: string[], state: DiscoveryState): Promise
 
 async function readSitemapText(
   url: string,
-  res: { body: ReadableStream<Uint8Array>; contentType: string | null; contentEncoding?: string | null },
+  res: {
+    body: ReadableStream<Uint8Array>;
+    contentType: string | null;
+    contentEncoding?: string | null;
+  }
 ): Promise<string> {
   let body = res.body;
   if (shouldDecompressGzip(url, res)) {
@@ -252,7 +267,7 @@ async function readSitemapText(
 
 function shouldDecompressGzip(
   url: string,
-  res: { contentType: string | null; contentEncoding?: string | null },
+  res: { contentType: string | null; contentEncoding?: string | null }
 ): boolean {
   const contentEncoding = res.contentEncoding?.toLowerCase() ?? "";
   if (contentEncoding.includes("gzip")) return false;

@@ -13,7 +13,7 @@ const GOOD = [
   "",
   "## Optional",
   "- [Privacy](https://example.com/privacy): Privacy policy.",
-  "",
+  ""
 ].join("\n");
 
 describe("validate", () => {
@@ -58,7 +58,10 @@ describe("validate", () => {
   });
 
   it("rejects cross-origin links", () => {
-    const res = validate("# Acme\n> s\n## Docs\n- [Other](https://other.com/x): Off-site.\n", ORIGIN);
+    const res = validate(
+      "# Acme\n> s\n## Docs\n- [Other](https://other.com/x): Off-site.\n",
+      ORIGIN
+    );
     expect(res.ok).toBe(false);
     if (!res.ok) expect(res.errors.join()).toMatch(/cross-origin/);
   });
@@ -70,7 +73,7 @@ describe("validate", () => {
       "## Optional",
       "- [Privacy](https://example.com/privacy): Policy.",
       "## Docs",
-      "- [Docs](https://example.com/docs): Docs.",
+      "- [Docs](https://example.com/docs): Docs."
     ].join("\n");
     const res = validate(out, ORIGIN);
     expect(res.ok).toBe(false);

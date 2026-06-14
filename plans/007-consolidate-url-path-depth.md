@@ -62,7 +62,7 @@ export function byDepth(urls: string[]): string[] {
 }
 ```
 
-**Copy C — DIFFERENT fallback** (uses `pathOf`, which returns the *url string*
+**Copy C — DIFFERENT fallback** (uses `pathOf`, which returns the _url string_
 on parse failure, so a bad URL is counted by its raw segments rather than
 sorted last):
 
@@ -76,8 +76,8 @@ function pathDepth(url: string): number {
 // pathOf (same file, ~lines 55-63): try { return new URL(url).pathname } catch { return url }
 ```
 
-- `prioritizeShallow` (sitemap) and `byDepth` (monitor) only need *relative
-  ordering*, and both push unparseable URLs to the end — the shared helper
+- `prioritizeShallow` (sitemap) and `byDepth` (monitor) only need _relative
+  ordering_, and both push unparseable URLs to the end — the shared helper
   should preserve that (`MAX_SAFE_INTEGER` fallback).
 - `pathDepth` (heuristics) is used for page ranking; its `pathOf` fallback is a
   different choice. **This plan does not change Copy C's behavior** — see
@@ -88,21 +88,23 @@ function pathDepth(url: string): number {
 
 ## Commands you will need
 
-| Purpose   | Command                                                | Expected on success |
-|-----------|--------------------------------------------------------|---------------------|
-| Typecheck | `pnpm --filter @profound-takehome/api typecheck`       | exit 0              |
-| Tests     | `pnpm --filter @profound-takehome/api test`            | all pass            |
-| Full gate | `pnpm verify`                                          | exit 0              |
+| Purpose   | Command                                          | Expected on success |
+| --------- | ------------------------------------------------ | ------------------- |
+| Typecheck | `pnpm --filter @profound-takehome/api typecheck` | exit 0              |
+| Tests     | `pnpm --filter @profound-takehome/api test`      | all pass            |
+| Full gate | `pnpm verify`                                    | exit 0              |
 
 ## Scope
 
 **In scope** (the only files you should modify):
+
 - `apps/api/src/lib/url.ts` — add exported `urlPathDepth(url: string): number`.
 - `apps/api/src/lib/url.test.ts` — tests for the new helper.
 - `apps/api/src/crawler/sitemap.ts` — replace Copy A's inline `depth` with the import.
 - `apps/api/src/queue/monitor-consumer.ts` — replace Copy B's inline `depth` with the import (keep `byDepth`'s exported signature and the `localeCompare` tiebreaker).
 
 **Out of scope** (do NOT touch unless Step 3 decides to):
+
 - `apps/api/src/generator/heuristics.ts` Copy C — only change it if Step 3's
   analysis proves its `pathOf` fallback is behaviorally equivalent for its
   inputs. Default is **leave it alone**.
@@ -151,6 +153,7 @@ In `apps/api/src/lib/url.test.ts`, add a `describe("urlPathDepth")` block:
 
 Read `pathOf`/`pathDepth` in `apps/api/src/generator/heuristics.ts` and how
 `pathDepth` is used (page ranking). Decision rule:
+
 - If `pathDepth` is only ever called on URLs already known to parse (e.g. they
   came from the inventory built from successfully-crawled pages), then its
   `pathOf` fallback is **never exercised** and switching it to `urlPathDepth` is
@@ -222,7 +225,7 @@ Stop and report back (do not improvise) if:
 ## Maintenance notes
 
 - `urlPathDepth` deliberately sorts unparseable URLs last. If a caller ever
-  needs a *different* fallback (like heuristics' `pathOf`), do **not** add a flag
+  needs a _different_ fallback (like heuristics' `pathOf`), do **not** add a flag
   to this helper — keep that caller's own primitive. One shared helper for the
   common case, not a configurable mega-function.
 - A reviewer should confirm the sort tiebreakers in both call sites are

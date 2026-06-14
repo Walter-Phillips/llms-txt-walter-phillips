@@ -19,7 +19,7 @@ type SiteRow = typeof sites.$inferSelect;
 export async function listVersions(
   c: Context<{ Bindings: Env }>,
   db: ReturnType<typeof drizzle>,
-  site: SiteRow,
+  site: SiteRow
 ) {
   const versions = await db
     .select()
@@ -34,7 +34,7 @@ export async function computeDiff(
   db: ReturnType<typeof drizzle>,
   site: SiteRow,
   from: number,
-  to: number,
+  to: number
 ) {
   const rows = await db
     .select()
@@ -46,7 +46,7 @@ export async function computeDiff(
 
   const [fromObj, toObj] = await Promise.all([
     c.env.FILES.get(fromRow.r2Key),
-    c.env.FILES.get(toRow.r2Key),
+    c.env.FILES.get(toRow.r2Key)
   ]);
   if (!fromObj || !toObj) return c.json({ error: "file_missing" }, 500);
 
@@ -74,7 +74,10 @@ export function domainCandidates(param: string): string[] {
   return [...candidates];
 }
 
-async function findSiteByDomainParam(db: ReturnType<typeof drizzle>, param: string): Promise<SiteRow | undefined> {
+async function findSiteByDomainParam(
+  db: ReturnType<typeof drizzle>,
+  param: string
+): Promise<SiteRow | undefined> {
   for (const candidate of domainCandidates(param)) {
     const site = await db.select().from(sites).where(eq(sites.domain, candidate)).get();
     if (site) return site;
@@ -105,8 +108,8 @@ filesRouter.get("/:domain/llms.txt", async (c) => {
     headers: {
       "content-type": "text/markdown; charset=utf-8",
       "cache-control": "public, max-age=300",
-      "x-llms-txt-version": String(latest.version),
-    },
+      "x-llms-txt-version": String(latest.version)
+    }
   });
 });
 
@@ -140,8 +143,8 @@ filesRouter.get("/:domain/versions/:v", async (c) => {
     headers: {
       "content-type": "text/markdown; charset=utf-8",
       "cache-control": "public, max-age=31536000, immutable",
-      "x-llms-txt-version": String(row.version),
-    },
+      "x-llms-txt-version": String(row.version)
+    }
   });
 });
 
@@ -203,7 +206,7 @@ export function unifiedDiff(
   toText: string,
   fromLabel: string,
   toLabel: string,
-  context = 3,
+  context = 3
 ): string {
   const a = splitLines(fromText);
   const b = splitLines(toText);

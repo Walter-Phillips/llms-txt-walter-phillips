@@ -9,7 +9,7 @@ function page(url: string, overrides: Partial<Inventory["sections"][0]["pages"][
     description: "Original description",
     h1: null,
     sectionHint: null,
-    ...overrides,
+    ...overrides
   };
 }
 
@@ -21,14 +21,14 @@ function inventory(): Inventory {
     sections: [
       {
         name: "Documentation",
-        pages: [page("https://acme.dev/docs"), page("https://acme.dev/docs/install")],
+        pages: [page("https://acme.dev/docs"), page("https://acme.dev/docs/install")]
       },
       {
         name: "Core Pages",
-        pages: [page("https://acme.dev/about"), page("https://acme.dev/careers")],
-      },
+        pages: [page("https://acme.dev/about"), page("https://acme.dev/careers")]
+      }
     ],
-    optional: [page("https://acme.dev/privacy")],
+    optional: [page("https://acme.dev/privacy")]
   };
 }
 
@@ -41,33 +41,30 @@ describe("refineWithCaller", () => {
           name: "Getting Started",
           pages: [
             { url: "https://acme.dev/docs/install", description: "Install Acme in minutes." },
-            { url: "https://acme.dev/docs", description: "Full product documentation." },
-          ],
+            { url: "https://acme.dev/docs", description: "Full product documentation." }
+          ]
         },
         {
           name: "Company",
-          pages: [{ url: "https://acme.dev/about", description: "About the Acme team." }],
-        },
+          pages: [{ url: "https://acme.dev/about", description: "About the Acme team." }]
+        }
       ],
       optional: [
         { url: "https://acme.dev/careers", description: "Open roles." },
-        { url: "https://acme.dev/privacy" },
-      ],
+        { url: "https://acme.dev/privacy" }
+      ]
     });
 
     const result = await refineWithCaller(inventory(), caller);
     expect(result).not.toBeNull();
     expect(result!.summary).toBe(
-      "Acme is a developer tools company with documentation for its products.",
+      "Acme is a developer tools company with documentation for its products."
     );
-    expect(result!.inventory.sections.map((s) => s.name)).toEqual([
-      "Getting Started",
-      "Company",
-    ]);
+    expect(result!.inventory.sections.map((s) => s.name)).toEqual(["Getting Started", "Company"]);
     // LLM ordering within a section is respected.
     expect(result!.inventory.sections[0].pages.map((p) => p.url)).toEqual([
       "https://acme.dev/docs/install",
-      "https://acme.dev/docs",
+      "https://acme.dev/docs"
     ]);
     // LLM description applied; original page metadata preserved.
     expect(result!.inventory.sections[0].pages[0].description).toBe("Install Acme in minutes.");
@@ -75,7 +72,7 @@ describe("refineWithCaller", () => {
     // Careers demoted; original description kept when LLM gives none.
     expect(result!.inventory.optional.map((p) => p.url)).toEqual([
       "https://acme.dev/careers",
-      "https://acme.dev/privacy",
+      "https://acme.dev/privacy"
     ]);
     expect(result!.inventory.optional[1].description).toBe("Original description");
     // Untouched site metadata passes through.
@@ -93,18 +90,15 @@ describe("refineWithCaller", () => {
             { url: "https://acme.dev/docs" },
             { url: "https://acme.dev/docs/quickstart" }, // hallucinated
             { url: "https://evil.example.com/docs" }, // hallucinated
-            { url: "https://acme.dev/docs/install" },
-          ],
+            { url: "https://acme.dev/docs/install" }
+          ]
         },
         {
           name: "Company",
-          pages: [
-            { url: "https://acme.dev/about" },
-            { url: "https://acme.dev/careers" },
-          ],
-        },
+          pages: [{ url: "https://acme.dev/about" }, { url: "https://acme.dev/careers" }]
+        }
       ],
-      optional: [{ url: "https://acme.dev/privacy" }],
+      optional: [{ url: "https://acme.dev/privacy" }]
     });
 
     const result = await refineWithCaller(inventory(), caller);
@@ -114,7 +108,7 @@ describe("refineWithCaller", () => {
       "https://acme.dev/docs",
       "https://acme.dev/docs/install",
       "https://acme.dev/about",
-      "https://acme.dev/careers",
+      "https://acme.dev/careers"
     ]);
     expect(urls).not.toContain("https://acme.dev/docs/quickstart");
   });
@@ -126,18 +120,15 @@ describe("refineWithCaller", () => {
         {
           name: "Docs",
           // Omits /docs/install (same original section as /docs).
-          pages: [{ url: "https://acme.dev/docs" }],
+          pages: [{ url: "https://acme.dev/docs" }]
         },
         {
           name: "Company",
-          pages: [
-            { url: "https://acme.dev/about" },
-            { url: "https://acme.dev/careers" },
-          ],
-        },
+          pages: [{ url: "https://acme.dev/about" }, { url: "https://acme.dev/careers" }]
+        }
       ],
       // Omits the originally-optional /privacy page entirely.
-      optional: [],
+      optional: []
     });
 
     const result = await refineWithCaller(inventory(), caller);
@@ -146,7 +137,7 @@ describe("refineWithCaller", () => {
     const docs = result!.inventory.sections.find((s) => s.name === "Docs");
     expect(docs!.pages.map((p) => p.url)).toEqual([
       "https://acme.dev/docs",
-      "https://acme.dev/docs/install",
+      "https://acme.dev/docs/install"
     ]);
     // Originally-optional page goes back to optional.
     expect(result!.inventory.optional.map((p) => p.url)).toEqual(["https://acme.dev/privacy"]);
@@ -158,14 +149,11 @@ describe("refineWithCaller", () => {
       sections: [
         {
           name: "Docs",
-          pages: [
-            { url: "https://acme.dev/docs" },
-            { url: "https://acme.dev/docs/install" },
-          ],
-        },
+          pages: [{ url: "https://acme.dev/docs" }, { url: "https://acme.dev/docs/install" }]
+        }
         // "Core Pages" section omitted entirely.
       ],
-      optional: [{ url: "https://acme.dev/privacy" }],
+      optional: [{ url: "https://acme.dev/privacy" }]
     });
 
     const result = await refineWithCaller(inventory(), caller);
@@ -174,7 +162,7 @@ describe("refineWithCaller", () => {
     expect(recreated).toBeDefined();
     expect(recreated!.pages.map((p) => p.url).sort()).toEqual([
       "https://acme.dev/about",
-      "https://acme.dev/careers",
+      "https://acme.dev/careers"
     ]);
   });
 
@@ -190,7 +178,7 @@ describe("refineWithCaller", () => {
       "not json",
       { summary: 42, sections: [] },
       { sections: [{ name: "Docs", pages: [] }] }, // missing summary
-      { summary: "ok", sections: [{ name: "Docs", pages: [{ description: "no url" }] }] },
+      { summary: "ok", sections: [{ name: "Docs", pages: [{ description: "no url" }] }] }
     ]) {
       const caller = vi.fn().mockResolvedValue(bad);
       await expect(refineWithCaller(inventory(), caller)).resolves.toBeNull();
@@ -201,7 +189,7 @@ describe("refineWithCaller", () => {
     const caller = vi.fn().mockResolvedValue({
       summary: "   \n  ",
       sections: [{ name: "Docs", pages: [{ url: "https://acme.dev/docs" }] }],
-      optional: [],
+      optional: []
     });
     await expect(refineWithCaller(inventory(), caller)).resolves.toBeNull();
   });
@@ -217,11 +205,11 @@ describe("refineWithCaller", () => {
           pages: [
             { url: "https://acme.dev/docs/install" },
             { url: "https://acme.dev/about" },
-            { url: "https://acme.dev/careers" },
-          ],
-        },
+            { url: "https://acme.dev/careers" }
+          ]
+        }
       ],
-      optional: [{ url: "https://acme.dev/privacy" }],
+      optional: [{ url: "https://acme.dev/privacy" }]
     });
 
     const result = await refineWithCaller(inventory(), caller);
@@ -240,7 +228,7 @@ describe("refineWithCaller", () => {
     const largeInventory: Inventory = {
       ...inventory(),
       sections: [{ name: "Documentation", pages }],
-      optional: [],
+      optional: []
     };
     let prompt = "";
     const caller = vi.fn(async (input: string) => {
@@ -248,7 +236,7 @@ describe("refineWithCaller", () => {
       return {
         summary: "Acme developer tools.",
         sections: [{ name: "Docs", pages: [{ url: "https://acme.dev/docs/0" }] }],
-        optional: [],
+        optional: []
       };
     });
 

@@ -6,7 +6,7 @@ import { createSiteCoordinator, createTestEnv, FakeDb } from "../test-helpers";
 import { jobsRouter } from "./jobs";
 
 vi.mock("drizzle-orm/d1", () => ({
-  drizzle: vi.fn((db) => db),
+  drizzle: vi.fn((db) => db)
 }));
 
 function appForJobs() {
@@ -40,7 +40,7 @@ describe("jobsRouter", () => {
       pagesCrawled: 2,
       pagesChanged: 0,
       startedAt: 100,
-      finishedAt: 200,
+      finishedAt: 200
     };
     const db = new FakeDb();
     db.queueSelect(crawlRuns, run);
@@ -61,7 +61,7 @@ describe("jobsRouter", () => {
       pagesCrawled: 1,
       pagesChanged: 0,
       startedAt: 100,
-      finishedAt: null,
+      finishedAt: null
     };
     const live = { status: "crawling", queued: 2 };
     const db = new FakeDb();
@@ -71,7 +71,7 @@ describe("jobsRouter", () => {
     const response = await appForJobs().request(
       "/api/jobs/run_active",
       {},
-      createTestEnv(db, { SITE_COORDINATOR: coordinator.namespace }),
+      createTestEnv(db, { SITE_COORDINATOR: coordinator.namespace })
     );
 
     expect(response.status).toBe(200);
@@ -79,4 +79,3 @@ describe("jobsRouter", () => {
     expect(coordinator.fetch).toHaveBeenCalledWith("https://do/status");
   });
 });
-

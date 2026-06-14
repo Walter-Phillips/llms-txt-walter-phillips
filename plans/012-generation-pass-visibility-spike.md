@@ -19,7 +19,7 @@
 ## Why this matters
 
 `generate()` (`apps/api/src/generator/index.ts`) always runs deterministic Pass 1
-heuristics, then *attempts* Pass 2 LLM refinement and **silently** falls back to
+heuristics, then _attempts_ Pass 2 LLM refinement and **silently** falls back to
 Pass 1 on any failure (thrown error, `null`, or refined output failing
 validation — lines 94-112). This graceful degradation is good engineering, but
 it's invisible: a user can't tell whether they're looking at a polished,
@@ -75,7 +75,7 @@ try {
    - Where it's set in `generate()` (the `content = refinedContent` branch →
      `"llm-refined"`, else `"heuristic"`), how it flows through the contract to
      the UI, and the UI treatment (a small badge near the rendered file).
-   - Open questions for the operator: (a) do we also want to expose *why* Pass 2
+   - Open questions for the operator: (a) do we also want to expose _why_ Pass 2
      was skipped (no key / error / validation miss) for operators, or just the
      outcome for users? (b) a user-facing **toggle** to force a pass — recommend
      **deferring**; it's a product decision and the current always-try/fallback
@@ -87,18 +87,19 @@ try {
 
 ## Commands you will need
 
-| Purpose          | Command                                          | Expected on success |
-|------------------|--------------------------------------------------|---------------------|
-| API typecheck    | `pnpm --filter @profound-takehome/api typecheck` | exit 0              |
-| DB typecheck     | `pnpm --filter @profound-takehome/db typecheck`  | exit 0              |
-| Web typecheck    | `pnpm --filter @profound-takehome/web typecheck` | exit 0              |
-| Tests            | `pnpm test`                                      | all pass            |
-| Doc check        | `pnpm check-docs`                                | exit 0              |
-| Full gate        | `pnpm verify`                                    | exit 0              |
+| Purpose       | Command                                          | Expected on success |
+| ------------- | ------------------------------------------------ | ------------------- |
+| API typecheck | `pnpm --filter @profound-takehome/api typecheck` | exit 0              |
+| DB typecheck  | `pnpm --filter @profound-takehome/db typecheck`  | exit 0              |
+| Web typecheck | `pnpm --filter @profound-takehome/web typecheck` | exit 0              |
+| Tests         | `pnpm test`                                      | all pass            |
+| Doc check     | `pnpm check-docs`                                | exit 0              |
+| Full gate     | `pnpm verify`                                    | exit 0              |
 
 ## Scope
 
 **In scope** (thin slice):
+
 - `docs/exec-plans/generation-pass-visibility.md` (create).
 - `packages/db/src/schema.ts` — add `generatedBy: text("generated_by")` (nullable for back-compat) to `file_versions`.
 - `packages/db/migrations/00NN_file_version_generated_by.sql` (create) — `ALTER TABLE file_versions ADD COLUMN generated_by TEXT;` (next free number).
@@ -113,9 +114,10 @@ try {
   and `"llm-refined"` when refinement is applied.
 
 **Out of scope** (STOP if pulled here):
+
 - A user-facing toggle / `refinementMode` request param (product decision —
   open question only).
-- Changing the fallback behavior itself (it's correct; only *record* the outcome).
+- Changing the fallback behavior itself (it's correct; only _record_ the outcome).
 - Backfilling `generated_by` for existing rows (nullable handles old rows;
   note it).
 
@@ -179,6 +181,7 @@ the refined and all-three-fallback paths (reuse plan 005's fakes if present).
 ## STOP conditions
 
 Stop and report back if:
+
 - Recording the pass appears to require changing the fallback control flow (it
   should be a single boolean at the `content = refinedContent` site).
 - The work drifts toward a user toggle / `refinementMode` (out of scope).
@@ -187,7 +190,7 @@ Stop and report back if:
 
 ## Maintenance notes
 
-- The pass is a property of the *file version*, not the run — keep it on
+- The pass is a property of the _file version_, not the run — keep it on
   `file_versions`. If a future change makes Pass 1 and Pass 2 both ship (e.g. a
   preview), this becomes a richer status, but a two-value enum is right today.
 - `generated_by` is nullable so pre-existing rows don't need backfill; the UI

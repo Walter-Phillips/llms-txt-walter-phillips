@@ -88,17 +88,18 @@ migrations. Single source of truth for table shapes."
 
 ## Commands you will need
 
-| Purpose          | Command                                                       | Expected on success |
-|------------------|---------------------------------------------------------------|---------------------|
-| Typecheck        | `pnpm --filter @profound-takehome/api typecheck`              | exit 0              |
-| DB typecheck     | `pnpm --filter @profound-takehome/db typecheck`               | exit 0              |
-| Tests            | `pnpm --filter @profound-takehome/api test`                   | all pass            |
-| Apply migration (local, optional) | `pnpm --filter @profound-takehome/api db:migrate:local` | applies cleanly |
-| Full gate        | `pnpm verify`                                                 | exit 0              |
+| Purpose                           | Command                                                 | Expected on success |
+| --------------------------------- | ------------------------------------------------------- | ------------------- |
+| Typecheck                         | `pnpm --filter @profound-takehome/api typecheck`        | exit 0              |
+| DB typecheck                      | `pnpm --filter @profound-takehome/db typecheck`         | exit 0              |
+| Tests                             | `pnpm --filter @profound-takehome/api test`             | all pass            |
+| Apply migration (local, optional) | `pnpm --filter @profound-takehome/api db:migrate:local` | applies cleanly     |
+| Full gate                         | `pnpm verify`                                           | exit 0              |
 
 ## Scope
 
 **In scope** (the only files you should modify/create):
+
 - `packages/db/src/schema.ts` — add the composite index to the `pages` table def.
 - `packages/db/migrations/0002_pages_site_status_idx.sql` (create) — the
   matching `CREATE INDEX`.
@@ -106,6 +107,7 @@ migrations. Single source of truth for table shapes."
   lookup in the no-sitemap branch.
 
 **Out of scope** (do NOT touch):
+
 - `apps/api/src/generator/index.ts` — it benefits from the index automatically;
   no code change needed there.
 - Any other table's indexes; query shapes; the `byDepth` helper.

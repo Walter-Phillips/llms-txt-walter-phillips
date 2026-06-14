@@ -15,7 +15,7 @@ export interface JobStatusState {
 /** Polls GET /api/jobs/:runId until the run reaches a terminal state. */
 export function useJobStatus(
   runId: string,
-  intervalMs: number = JOB_POLL_INTERVAL_MS,
+  intervalMs: number = JOB_POLL_INTERVAL_MS
 ): JobStatusState {
   const [state, setState] = useState<JobStatusState>({ status: null, pollError: null });
 
@@ -33,8 +33,7 @@ export function useJobStatus(
         }
       } catch (err) {
         if (cancelled) return;
-        const message =
-          err instanceof ApiRequestError ? err.message : "Lost contact with the API.";
+        const message = err instanceof ApiRequestError ? err.message : "Lost contact with the API.";
         setState((prev) => ({ ...prev, pollError: message }));
         // Keep polling through transient failures.
         timer = setTimeout(tick, intervalMs);

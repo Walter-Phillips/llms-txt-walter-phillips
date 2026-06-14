@@ -41,7 +41,7 @@ The DO holds an in-memory `State` persisted to `this.ctx.storage` and exposes a
 small HTTP-style surface via `fetch(req)` dispatching on `url.pathname`. Key
 behaviors to pin (all line numbers in `apps/api/src/do/site-coordinator.ts`):
 
-- **claim** (lines 93-112): rejects with 409 when a *different* runId is active
+- **claim** (lines 93-112): rejects with 409 when a _different_ runId is active
   in phase `discovering|crawling|generating`; otherwise resets to a fresh state
   for the new run.
 - **seed** (lines 114-120): ignores requests whose `runId` ≠ current; otherwise
@@ -84,24 +84,26 @@ private async complete(body: CompleteRequest): Promise<Response> {
 
 ## Commands you will need
 
-| Purpose   | Command                                              | Expected on success |
-|-----------|------------------------------------------------------|---------------------|
-| Install   | `pnpm install`                                       | exit 0              |
-| Probe     | `pnpm --filter @profound-takehome/api test -- site-coordinator` | see Step 1 |
-| Typecheck | `pnpm --filter @profound-takehome/api typecheck`     | exit 0              |
-| Tests     | `pnpm --filter @profound-takehome/api test`          | all pass            |
-| Full gate | `pnpm verify`                                        | exit 0              |
+| Purpose   | Command                                                         | Expected on success |
+| --------- | --------------------------------------------------------------- | ------------------- |
+| Install   | `pnpm install`                                                  | exit 0              |
+| Probe     | `pnpm --filter @profound-takehome/api test -- site-coordinator` | see Step 1          |
+| Typecheck | `pnpm --filter @profound-takehome/api typecheck`                | exit 0              |
+| Tests     | `pnpm --filter @profound-takehome/api test`                     | all pass            |
+| Full gate | `pnpm verify`                                                   | exit 0              |
 
 ## Scope
 
 **In scope** (the only files you should modify/create):
+
 - `apps/api/src/do/site-coordinator.test.ts` (create) — the characterization tests.
 - `apps/api/src/do/site-coordinator.ts` — **only** the minimal refactor in
-  Step 2 *if Step 1 proves the DO can't be imported under Node*: extract the
+  Step 2 _if Step 1 proves the DO can't be imported under Node_: extract the
   pure state-transition logic into exported helpers, leaving the class as a thin
   wrapper. No behavior change.
 
 **Out of scope** (do NOT touch):
+
 - `apps/api/src/crawler/frontier.ts` — already tested; `admit` delegates to it.
 - `wrangler.toml`, vitest pool configuration, or adding
   `@cloudflare/vitest-pool-workers` — if Node testing is impossible without it,
@@ -130,7 +132,7 @@ function fakeStorage() {
   const map = new Map<string, unknown>();
   return {
     get: async (k: string) => map.get(k),
-    put: async (k: string, v: unknown) => void map.set(k, v),
+    put: async (k: string, v: unknown) => void map.set(k, v)
   };
 }
 // Minimal DurableObjectState stand-in: only .storage is used by the class.
@@ -155,7 +157,7 @@ Run `pnpm --filter @profound-takehome/api test -- site-coordinator`.
   and test the class directly through its `fetch` surface.
 - **If it fails with an import/runtime error from `cloudflare:workers`** (e.g.
   "Cannot find module 'cloudflare:workers'" or `DurableObject is not a
-  constructor`) → go to Step 2 (refactor for testability). Do **not** try to add
+constructor`) → go to Step 2 (refactor for testability). Do **not** try to add
   a Workers vitest pool — that's a STOP.
 
 **Verify**: the smoke test either passes, or fails specifically on the
@@ -193,23 +195,27 @@ Whether testing via the class `fetch` surface (Step 1 path) or the pure helpers
 `apps/api/src/crawler/frontier.test.ts`.
 
 **Mutex (`claim`)**:
+
 - Fresh coordinator: `claim(runA)` succeeds, phase → `discovering`.
 - With `runA` active in `crawling`: `claim(runB)` returns **409** with
   `{ error: "run_in_progress", runId: runA }`.
 - With `runA` in terminal phase `done`: `claim(runB)` succeeds (mutex released).
 
 **Seed**:
+
 - `seed` with the wrong runId returns `{ accepted: [] }` and does not change state.
 - `seed` with the current runId admits unique same-origin URLs and sets phase
   `crawling`; `pagesFound` equals the accepted count.
 
 **Frontier budget (`admit` via seed)**:
+
 - Seeding more than `MAX_PAGES` (1000) candidates accepts at most the remaining
   budget (`pagesFound` never exceeds `MAX_PAGES`). Use a generated list of
   same-origin URLs (e.g. `https://x.test/p${i}`) so you don't hand-write 1000.
 - Duplicate URLs in the seed list are admitted once.
 
 **Drain + depth (`complete`)**:
+
 - Seed one URL, then `complete` it with no links → `drained: true`, phase →
   `generating`, `pagesCrawled === 1`.
 - With `followLinks: true` (links discovery mode), `complete` at `depth === MAX_DEPTH`
@@ -258,7 +264,7 @@ Stop and report back (do not improvise) if:
 
 - The smoke test in Step 1 fails for a reason **other** than the
   `cloudflare:workers` import (e.g. the class API differs from the excerpts).
-- Making the DO testable appears to *require* `@cloudflare/vitest-pool-workers`
+- Making the DO testable appears to _require_ `@cloudflare/vitest-pool-workers`
   or a wrangler/miniflare test environment — that's an infra decision for the
   operator, not this plan.
 - The `complete`/`admit`/`claim` source no longer matches the "Current state"

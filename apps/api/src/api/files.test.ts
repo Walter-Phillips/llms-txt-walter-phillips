@@ -5,7 +5,7 @@ describe("domainCandidates", () => {
   it("accepts encoded origins from public file URLs", () => {
     expect(domainCandidates("https%3A%2F%2FExample.com")).toEqual([
       "https://example.com",
-      "https://Example.com",
+      "https://Example.com"
     ]);
   });
 
@@ -13,7 +13,7 @@ describe("domainCandidates", () => {
     expect(domainCandidates("example.com")).toEqual([
       "example.com",
       "https://example.com",
-      "http://example.com",
+      "http://example.com"
     ]);
   });
 });
@@ -26,16 +26,9 @@ describe("unifiedDiff", () => {
   it("emits labels, hunk header, and +/- lines for a single change", () => {
     const out = unifiedDiff("a\nb\nc\n", "a\nB\nc\n", "llms.txt v1", "llms.txt v2");
     expect(out).toBe(
-      [
-        "--- llms.txt v1",
-        "+++ llms.txt v2",
-        "@@ -1,3 +1,3 @@",
-        " a",
-        "-b",
-        "+B",
-        " c",
-        "",
-      ].join("\n"),
+      ["--- llms.txt v1", "+++ llms.txt v2", "@@ -1,3 +1,3 @@", " a", "-b", "+B", " c", ""].join(
+        "\n"
+      )
     );
   });
 

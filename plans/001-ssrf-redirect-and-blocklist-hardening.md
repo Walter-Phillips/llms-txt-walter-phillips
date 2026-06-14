@@ -74,7 +74,7 @@ at every fetch hop.
   const res = await fetch(url, {
     headers,
     redirect: "follow",
-    signal: AbortSignal.timeout(TIMEOUT_MS),
+    signal: AbortSignal.timeout(TIMEOUT_MS)
   });
   ```
 
@@ -99,24 +99,26 @@ at every fetch hop.
 
 ## Commands you will need
 
-| Purpose   | Command                                                  | Expected on success |
-|-----------|----------------------------------------------------------|---------------------|
-| Install   | `pnpm install`                                           | exit 0              |
-| Typecheck | `pnpm --filter @profound-takehome/api typecheck`         | exit 0, no errors   |
-| Unit test | `pnpm --filter @profound-takehome/api test`              | all pass            |
-| Lint      | `pnpm --filter @profound-takehome/api lint`              | exit 0              |
-| Full gate | `pnpm verify` (from repo root)                           | exit 0              |
+| Purpose   | Command                                          | Expected on success |
+| --------- | ------------------------------------------------ | ------------------- |
+| Install   | `pnpm install`                                   | exit 0              |
+| Typecheck | `pnpm --filter @profound-takehome/api typecheck` | exit 0, no errors   |
+| Unit test | `pnpm --filter @profound-takehome/api test`      | all pass            |
+| Lint      | `pnpm --filter @profound-takehome/api lint`      | exit 0              |
+| Full gate | `pnpm verify` (from repo root)                   | exit 0              |
 
 ## Scope
 
 **In scope** (the only files you should modify):
+
 - `apps/api/src/lib/url.ts` — add an exported `isBlockedHost(hostname: string): boolean` predicate; use it inside `normalizeOrigin`.
 - `apps/api/src/lib/url.test.ts` — add cases for the new host forms.
 - `apps/api/src/crawler/fetcher.ts` — validate the final response URL after redirects; throw on a blocked host.
 - `apps/api/src/crawler/fetcher.test.ts` (create) — test the redirect guard.
 
 **Out of scope** (do NOT touch, even though they look related):
-- `apps/api/src/crawler/frontier.ts` — same-origin admission is a *separate*
+
+- `apps/api/src/crawler/frontier.ts` — same-origin admission is a _separate_
   control; do not fold SSRF logic into it.
 - `apps/api/src/api/sites.ts` / `files.ts` — they already call `normalizeOrigin`;
   hardening that function covers them. Do not add new validation there.
@@ -151,8 +153,8 @@ export function isBlockedHost(hostname: string): boolean {
   // IPv6 loopback / link-local (fe80::/10) / unique-local (fc00::/7),
   // and IPv4-mapped IPv6 like ::ffff:127.0.0.1 / ::ffff:10.0.0.1.
   if (host === "::1" || host === "::") return true;
-  if (/^fe[89ab][0-9a-f]:/.test(host)) return true;       // fe80::/10
-  if (/^f[cd][0-9a-f]{2}:/.test(host)) return true;        // fc00::/7
+  if (/^fe[89ab][0-9a-f]:/.test(host)) return true; // fe80::/10
+  if (/^f[cd][0-9a-f]{2}:/.test(host)) return true; // fc00::/7
   const mapped = host.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/);
   if (mapped) return isBlockedHost(mapped[1]!);
 
@@ -218,7 +220,11 @@ and after the `fetch` resolves, reject if the **final** URL's host is blocked.
 ```ts
 import { isBlockedHost } from "../lib/url";
 // …
-const res = await fetch(url, { headers, redirect: "follow", signal: AbortSignal.timeout(TIMEOUT_MS) });
+const res = await fetch(url, {
+  headers,
+  redirect: "follow",
+  signal: AbortSignal.timeout(TIMEOUT_MS)
+});
 
 // A page may redirect to internal space; re-check the host we actually landed on.
 if (res.url) {
@@ -294,7 +300,7 @@ Stop and report back (do not improvise) if:
   resolves to a private IP at fetch time) is not defended, because Workers
   `fetch` does not expose the resolved address. If the platform later offers an
   IP hook or a connect-time callback, pin/validate the resolved IP there.
-- A reviewer should confirm `isBlockedHost` is conservative on the *positive*
+- A reviewer should confirm `isBlockedHost` is conservative on the _positive_
   side: public IPs and normal hostnames must still pass, or every crawl breaks.
 - If a future change adds a new outbound `fetch` (e.g. a webhook sender), it
   must route through `politeFetch` or call `isBlockedHost` itself — the guard is

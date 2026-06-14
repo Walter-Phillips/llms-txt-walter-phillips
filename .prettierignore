@@ -1,0 +1,14 @@
+node_modules/
+
+.agents/
+.claude/
+.codex/
+
+.turbo/
+.wrangler/
+.next/
+coverage/
+dist/
+build/
+
+pnpm-lock.yaml

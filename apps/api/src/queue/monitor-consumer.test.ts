@@ -23,15 +23,13 @@ describe("parseSitemapXml", () => {
 </urlset>`;
     expect(sitemapEntries(xml)).toEqual([
       { url: "https://example.com/", lastmod: "2026-05-01" },
-      { url: "https://example.com/docs", lastmod: null },
+      { url: "https://example.com/docs", lastmod: null }
     ]);
   });
 
   it("decodes xml entities in urls", () => {
     const xml = `<urlset><url><loc>https://example.com/a?x=1&amp;y=2</loc></url></urlset>`;
-    expect(sitemapEntries(xml)).toEqual([
-      { url: "https://example.com/a?x=1&y=2", lastmod: null },
-    ]);
+    expect(sitemapEntries(xml)).toEqual([{ url: "https://example.com/a?x=1&y=2", lastmod: null }]);
   });
 
   it("returns empty for non-sitemap content", () => {
@@ -47,21 +45,21 @@ describe("byDepth", () => {
         "https://example.com/docs",
         "https://example.com/",
         "https://example.com/about",
-        "https://example.com/blog/post",
-      ]),
+        "https://example.com/blog/post"
+      ])
     ).toEqual([
       "https://example.com/",
       "https://example.com/about",
       "https://example.com/docs",
       "https://example.com/blog/post",
-      "https://example.com/a/b/c",
+      "https://example.com/a/b/c"
     ]);
   });
 
   it("pushes unparseable urls last", () => {
     expect(byDepth(["not a url", "https://example.com/"])).toEqual([
       "https://example.com/",
-      "not a url",
+      "not a url"
     ]);
   });
 });
@@ -75,14 +73,14 @@ describe("resolveCheck (hash vs conditional double-count)", () => {
     const resolved = resolveCheck(url, {
       outcome: "modified",
       storedHash: "h1",
-      currentHash: "h1",
+      currentHash: "h1"
     });
     expect(resolved.conditional).toEqual({ url, outcome: "unchanged" });
     expect(resolved.hash).toEqual({ url, storedHash: "h1", currentHash: "h1" });
 
     const changes = buildChangeSet({
       conditional: [resolved.conditional],
-      hashes: [resolved.hash!],
+      hashes: [resolved.hash!]
     });
     expect(changes.modified).toEqual([]);
   });
@@ -91,20 +89,20 @@ describe("resolveCheck (hash vs conditional double-count)", () => {
     const resolved = resolveCheck(url, {
       outcome: "modified",
       storedHash: "h1",
-      currentHash: "h2",
+      currentHash: "h2"
     });
     expect(resolved.conditional).toEqual({ url, outcome: "unchanged" });
 
     const changes = buildChangeSet({
       conditional: [resolved.conditional],
-      hashes: [resolved.hash!],
+      hashes: [resolved.hash!]
     });
     expect(changes.modified).toEqual([url]);
   });
 
   it("keeps removed/error outcomes even when a body hash was computed", () => {
     expect(
-      resolveCheck(url, { outcome: "removed", storedHash: "h1", currentHash: "h2" }).conditional,
+      resolveCheck(url, { outcome: "removed", storedHash: "h1", currentHash: "h2" }).conditional
     ).toEqual({ url, outcome: "removed" });
   });
 

@@ -3,12 +3,12 @@ import {
   discoverSitemapEntries,
   parseSitemapDocument,
   parseSitemapXml,
-  prioritizeShallow,
+  prioritizeShallow
 } from "./sitemap";
 
 vi.mock("./fetcher", () => ({
   politeFetch: vi.fn(),
-  readBodyText: vi.fn(),
+  readBodyText: vi.fn()
 }));
 
 import { politeFetch, readBodyText } from "./fetcher";
@@ -22,7 +22,7 @@ const mockReadBodyText = vi.mocked(readBodyText);
  * explicit 404s. readBodyText is stubbed to echo whatever body we attached.
  */
 function stubNetwork(
-  responses: Record<string, { xml?: string; status?: number; contentType?: string }>,
+  responses: Record<string, { xml?: string; status?: number; contentType?: string }>
 ): void {
   mockPoliteFetch.mockImplementation(async (url: string) => {
     const r = responses[url];
@@ -31,7 +31,7 @@ function stubNetwork(
       status === 200 && r?.xml !== undefined
         ? ({
             __xml: r.xml,
-            pipeThrough: vi.fn(() => ({ __xml: r.xml })),
+            pipeThrough: vi.fn(() => ({ __xml: r.xml }))
           } as unknown as ReadableStream<Uint8Array>)
         : null;
     return {
@@ -40,7 +40,7 @@ function stubNetwork(
       etag: null,
       lastModified: null,
       contentType: r?.contentType ?? "application/xml",
-      contentEncoding: null,
+      contentEncoding: null
     };
   });
   mockReadBodyText.mockImplementation(async (body: ReadableStream<Uint8Array>) => {
@@ -69,7 +69,7 @@ describe("parseSitemapXml", () => {
     expect(parsed.entries).toEqual([
       { url: "https://example.com/", lastmod: "2026-01-01" },
       { url: "https://example.com/docs/intro" },
-      { url: "https://example.com/a&b", lastmod: "2026-02-02" },
+      { url: "https://example.com/a&b", lastmod: "2026-02-02" }
     ]);
     expect(parsed.isNews).toBe(false);
   });
@@ -78,14 +78,14 @@ describe("parseSitemapXml", () => {
     const parsed = parseSitemapXml(INDEX);
     expect(parsed).toEqual({
       kind: "index",
-      sitemaps: ["https://example.com/sitemap-1.xml", "https://example.com/sitemap-2.xml"],
+      sitemaps: ["https://example.com/sitemap-1.xml", "https://example.com/sitemap-2.xml"]
     });
   });
 
   it("detects news sitemaps", () => {
     const news = URLSET.replace(
       "<urlset ",
-      '<urlset xmlns:news="http://www.google.com/schemas/sitemap-news/0.9" ',
+      '<urlset xmlns:news="http://www.google.com/schemas/sitemap-news/0.9" '
     );
     const parsed = parseSitemapXml(news);
     expect(parsed.kind === "urlset" && parsed.isNews).toBe(true);
@@ -104,12 +104,12 @@ describe("parseSitemapXml", () => {
     expect(parseSitemapXml(rss)).toEqual({
       kind: "urlset",
       entries: [{ url: "https://example.com/post-1", lastmod: "Mon, 01 Jun 2026 00:00:00 GMT" }],
-      isNews: false,
+      isNews: false
     });
     expect(parseSitemapXml(atom)).toEqual({
       kind: "urlset",
       entries: [{ url: "https://example.com/post-2", lastmod: "2026-06-02" }],
-      isNews: false,
+      isNews: false
     });
   });
 });
@@ -118,12 +118,12 @@ describe("parseSitemapDocument", () => {
   it("parses plain text sitemap urls", () => {
     expect(
       parseSitemapDocument(
-        ["https://example.com/", "", "not-a-url", "https://example.com/docs"].join("\n"),
-      ),
+        ["https://example.com/", "", "not-a-url", "https://example.com/docs"].join("\n")
+      )
     ).toEqual({
       kind: "urlset",
       entries: [{ url: "https://example.com/" }, { url: "https://example.com/docs" }],
-      isNews: false,
+      isNews: false
     });
   });
 });
@@ -134,12 +134,12 @@ describe("prioritizeShallow", () => {
       { url: "https://example.com/a/b/c" },
       { url: "https://example.com/" },
       { url: "https://example.com/a/b" },
-      { url: "https://example.com/a" },
+      { url: "https://example.com/a" }
     ];
     expect(prioritizeShallow(entries, 3).map((e) => e.url)).toEqual([
       "https://example.com/",
       "https://example.com/a",
-      "https://example.com/a/b",
+      "https://example.com/a/b"
     ]);
   });
 });
@@ -152,20 +152,20 @@ describe("discoverSitemapEntries", () => {
   it("falls back to conventional /sitemap.xml when the declared sitemap 404s", async () => {
     stubNetwork({
       "https://stale.example.com/sitemap.xml": { status: 404 },
-      "https://example.com/sitemap.xml": { xml: URLSET },
+      "https://example.com/sitemap.xml": { xml: URLSET }
     });
 
     const result = await discoverSitemapEntries("https://example.com", [
-      "https://stale.example.com/sitemap.xml",
+      "https://stale.example.com/sitemap.xml"
     ]);
 
     expect(result.entries.map((e) => e.url)).toContain("https://example.com/");
     expect(result.found).toEqual(["https://example.com/sitemap.xml"]);
     expect(mockPoliteFetch.mock.calls.map(([url]) => url)).toContain(
-      "https://stale.example.com/sitemap.xml",
+      "https://stale.example.com/sitemap.xml"
     );
     expect(mockPoliteFetch.mock.calls.map(([url]) => url)).toContain(
-      "https://example.com/sitemap.xml",
+      "https://example.com/sitemap.xml"
     );
   });
 
@@ -173,16 +173,16 @@ describe("discoverSitemapEntries", () => {
     stubNetwork({ "https://example.com/custom-sitemap.xml": { xml: URLSET } });
 
     const result = await discoverSitemapEntries("https://example.com", [
-      "https://example.com/custom-sitemap.xml",
+      "https://example.com/custom-sitemap.xml"
     ]);
 
     expect(result.found).toEqual(["https://example.com/custom-sitemap.xml"]);
     expect(mockPoliteFetch).toHaveBeenCalledTimes(1);
     expect(mockPoliteFetch.mock.calls.map(([url]) => url)).not.toContain(
-      "https://example.com/sitemap.xml",
+      "https://example.com/sitemap.xml"
     );
     expect(mockPoliteFetch.mock.calls.map(([url]) => url)).not.toContain(
-      "https://example.com/sitemap_index.xml",
+      "https://example.com/sitemap_index.xml"
     );
   });
 
@@ -190,7 +190,7 @@ describe("discoverSitemapEntries", () => {
     stubNetwork({});
 
     const result = await discoverSitemapEntries("https://example.com", [
-      "https://example.com/declared.xml",
+      "https://example.com/declared.xml"
     ]);
 
     expect(result.entries).toEqual([]);
@@ -199,7 +199,7 @@ describe("discoverSitemapEntries", () => {
     expect(mockPoliteFetch.mock.calls.map(([url]) => url)).toEqual([
       "https://example.com/declared.xml",
       "https://example.com/sitemap.xml",
-      "https://example.com/sitemap_index.xml",
+      "https://example.com/sitemap_index.xml"
     ]);
   });
 
@@ -207,7 +207,7 @@ describe("discoverSitemapEntries", () => {
     mockPoliteFetch.mockRejectedValue(new Error("network down"));
 
     const result = await discoverSitemapEntries("https://example.com", [
-      "https://example.com/declared.xml",
+      "https://example.com/declared.xml"
     ]);
 
     expect(result.entries).toEqual([]);
@@ -218,24 +218,24 @@ describe("discoverSitemapEntries", () => {
     stubNetwork({
       "https://example.com/sitemap_index.xml": { xml: INDEX },
       "https://example.com/sitemap-1.xml": {
-        xml: `<urlset><url><loc>https://example.com/one</loc></url></urlset>`,
+        xml: `<urlset><url><loc>https://example.com/one</loc></url></urlset>`
       },
       "https://example.com/sitemap-2.xml": {
-        xml: `<urlset><url><loc>https://example.com/two</loc></url></urlset>`,
-      },
+        xml: `<urlset><url><loc>https://example.com/two</loc></url></urlset>`
+      }
     });
 
     const result = await discoverSitemapEntries("https://example.com", [
-      "https://example.com/sitemap_index.xml",
+      "https://example.com/sitemap_index.xml"
     ]);
 
     expect(result.entries.map((e) => e.url).sort()).toEqual([
       "https://example.com/one",
-      "https://example.com/two",
+      "https://example.com/two"
     ]);
     // index recursed, so the conventional fallback should NOT run
     expect(mockPoliteFetch.mock.calls.map(([url]) => url)).not.toContain(
-      "https://example.com/sitemap.xml",
+      "https://example.com/sitemap.xml"
     );
   });
 
@@ -249,22 +249,22 @@ describe("discoverSitemapEntries", () => {
       ...Object.fromEntries(
         Array.from({ length: 8 }, (_, i) => [
           `https://stripe.com/sitemap/partition-${i}.xml`,
-          { xml: `<urlset><url><loc>https://stripe.com/page-${i}</loc></url></urlset>` },
-        ]),
-      ),
+          { xml: `<urlset><url><loc>https://stripe.com/page-${i}</loc></url></urlset>` }
+        ])
+      )
     });
 
     const result = await discoverSitemapEntries("https://stripe.com", [
-      "https://stripe.com/sitemap/sitemap.xml",
+      "https://stripe.com/sitemap/sitemap.xml"
     ]);
 
     expect(result.entries.map((entry) => entry.url)).toEqual(
-      Array.from({ length: 8 }, (_, i) => `https://stripe.com/page-${i}`),
+      Array.from({ length: 8 }, (_, i) => `https://stripe.com/page-${i}`)
     );
     expect(mockPoliteFetch).toHaveBeenCalledTimes(9);
     expect(mockPoliteFetch).toHaveBeenCalledWith(
       "https://stripe.com/sitemap/partition-0.xml",
-      expect.objectContaining({ maxBodyBytes: 50 * 1024 * 1024 }),
+      expect.objectContaining({ maxBodyBytes: 50 * 1024 * 1024 })
     );
   });
 
@@ -272,12 +272,12 @@ describe("discoverSitemapEntries", () => {
     stubNetwork({
       "https://example.com/sitemap.xml.gz": {
         xml: `<urlset><url><loc>https://example.com/gzip</loc></url></urlset>`,
-        contentType: "application/gzip",
-      },
+        contentType: "application/gzip"
+      }
     });
 
     const result = await discoverSitemapEntries("https://example.com", [
-      "https://example.com/sitemap.xml.gz",
+      "https://example.com/sitemap.xml.gz"
     ]);
 
     expect(result.entries).toEqual([{ url: "https://example.com/gzip" }]);
@@ -289,7 +289,7 @@ describe("discoverSitemapEntries", () => {
     await discoverSitemapEntries("https://example.com", ["https://example.com/sitemap.xml"]);
 
     const sitemapXmlCalls = mockPoliteFetch.mock.calls.filter(
-      ([u]) => u === "https://example.com/sitemap.xml",
+      ([u]) => u === "https://example.com/sitemap.xml"
     );
     expect(sitemapXmlCalls).toHaveLength(1);
   });

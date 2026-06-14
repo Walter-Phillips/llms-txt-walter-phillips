@@ -32,7 +32,7 @@ sitesRouter.post("/", async (c) => {
       monitoring: 0,
       checkIntervalS: 86400,
       changeStreak: 0,
-      createdAt: now,
+      createdAt: now
     });
   }
 
@@ -42,7 +42,7 @@ sitesRouter.post("/", async (c) => {
     siteId,
     trigger: existing ? "manual" : "initial",
     status: "queued",
-    startedAt: now,
+    startedAt: now
   });
 
   await c.env.CRAWL_QUEUE.send({ type: "discover", runId, siteId, url: origin });
@@ -52,7 +52,11 @@ sitesRouter.post("/", async (c) => {
 
 sitesRouter.get("/:id", async (c) => {
   const db = drizzle(c.env.DB);
-  const site = await db.select().from(sites).where(eq(sites.id, c.req.param("id"))).get();
+  const site = await db
+    .select()
+    .from(sites)
+    .where(eq(sites.id, c.req.param("id")))
+    .get();
   if (!site) return c.json({ error: "not_found" }, 404);
   const latestVersion = await db
     .select()
@@ -69,7 +73,11 @@ sitesRouter.patch("/:id/monitoring", async (c) => {
   if (!body.success) return c.json({ error: "invalid_body" }, 400);
 
   const db = drizzle(c.env.DB);
-  const site = await db.select().from(sites).where(eq(sites.id, c.req.param("id"))).get();
+  const site = await db
+    .select()
+    .from(sites)
+    .where(eq(sites.id, c.req.param("id")))
+    .get();
   if (!site) return c.json({ error: "not_found" }, 404);
 
   const now = Math.floor(Date.now() / 1000);
@@ -78,7 +86,7 @@ sitesRouter.patch("/:id/monitoring", async (c) => {
     .set({
       monitoring: body.data.enabled ? 1 : 0,
       // First check after the current interval; the cadence loop adapts from there.
-      nextCheckAt: body.data.enabled ? now + site.checkIntervalS : null,
+      nextCheckAt: body.data.enabled ? now + site.checkIntervalS : null
     })
     .where(eq(sites.id, site.id));
 
@@ -88,14 +96,22 @@ sitesRouter.patch("/:id/monitoring", async (c) => {
 
 sitesRouter.get("/:id/versions", async (c) => {
   const db = drizzle(c.env.DB);
-  const site = await db.select().from(sites).where(eq(sites.id, c.req.param("id"))).get();
+  const site = await db
+    .select()
+    .from(sites)
+    .where(eq(sites.id, c.req.param("id")))
+    .get();
   if (!site) return c.json({ error: "not_found" }, 404);
   return listVersions(c, db, site);
 });
 
 sitesRouter.get("/:id/pages", async (c) => {
   const db = drizzle(c.env.DB);
-  const site = await db.select().from(sites).where(eq(sites.id, c.req.param("id"))).get();
+  const site = await db
+    .select()
+    .from(sites)
+    .where(eq(sites.id, c.req.param("id")))
+    .get();
   if (!site) return c.json({ error: "not_found" }, 404);
   const rows = await db
     .select({
@@ -103,7 +119,7 @@ sitesRouter.get("/:id/pages", async (c) => {
       title: pages.title,
       description: pages.description,
       sectionHint: pages.sectionHint,
-      status: pages.status,
+      status: pages.status
     })
     .from(pages)
     .where(eq(pages.siteId, site.id))
@@ -119,7 +135,11 @@ sitesRouter.get("/:id/diff", async (c) => {
   }
 
   const db = drizzle(c.env.DB);
-  const site = await db.select().from(sites).where(eq(sites.id, c.req.param("id"))).get();
+  const site = await db
+    .select()
+    .from(sites)
+    .where(eq(sites.id, c.req.param("id")))
+    .get();
   if (!site) return c.json({ error: "not_found" }, 404);
 
   return computeDiff(c, db, site, from, to);

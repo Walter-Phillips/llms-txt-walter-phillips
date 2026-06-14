@@ -15,7 +15,7 @@ import {
   diffSitemap,
   isRegenerationWorthy,
   type ConditionalOutcome,
-  type SitemapEntry,
+  type SitemapEntry
 } from "../monitor/detect";
 import { nextInterval, nextStreak } from "../monitor/schedule";
 
@@ -40,7 +40,7 @@ const MAX_MONITOR_SITEMAP_URLS = 1_000;
 export async function handleMonitorBatch(
   batch: MessageBatch<MonitorMessage>,
   env: Env,
-  _ctx: ExecutionContext,
+  _ctx: ExecutionContext
 ): Promise<void> {
   for (const msg of batch.messages) {
     try {
@@ -64,7 +64,7 @@ async function checkSite(env: Env, siteId: string): Promise<void> {
       etag: pages.etag,
       lastModified: pages.lastModified,
       sitemapLastmod: pages.sitemapLastmod,
-      contentHash: pages.contentHash,
+      contentHash: pages.contentHash
     })
     .from(pages)
     .where(and(eq(pages.siteId, siteId), eq(pages.status, "active")));
@@ -121,7 +121,7 @@ async function checkSite(env: Env, siteId: string): Promise<void> {
       status: "queued",
       pagesChanged: changes.added.length + changes.removed.length + changes.modified.length,
       changeSummary: summarizeChanges(changes),
-      startedAt: now,
+      startedAt: now
     });
     // One discover message; the crawl pipeline re-crawls the site and
     // regenerates the file. Page upserts are idempotent so overlap with a
@@ -136,7 +136,7 @@ async function checkSite(env: Env, siteId: string): Promise<void> {
     .set({
       checkIntervalS: interval,
       nextCheckAt: now + interval,
-      changeStreak: nextStreak(site.changeStreak, changesFound),
+      changeStreak: nextStreak(site.changeStreak, changesFound)
     })
     .where(eq(sites.id, siteId));
 }
@@ -162,7 +162,7 @@ type CheckResult = {
  */
 export function resolveCheck(
   url: string,
-  result: CheckResult,
+  result: CheckResult
 ): {
   conditional: { url: string; outcome: ConditionalOutcome };
   hash?: { url: string; storedHash: string | null; currentHash: string | null };
@@ -170,7 +170,7 @@ export function resolveCheck(
   if (result.currentHash !== undefined) {
     return {
       conditional: { url, outcome: result.outcome === "modified" ? "unchanged" : result.outcome },
-      hash: { url, storedHash: result.storedHash, currentHash: result.currentHash },
+      hash: { url, storedHash: result.storedHash, currentHash: result.currentHash }
     };
   }
   return { conditional: { url, outcome: result.outcome } };
@@ -178,12 +178,12 @@ export function resolveCheck(
 
 async function conditionalCheck(
   url: string,
-  stored: { etag: string | null; lastModified: string | null; contentHash: string | null },
+  stored: { etag: string | null; lastModified: string | null; contentHash: string | null }
 ): Promise<CheckResult> {
   try {
     const res = await politeFetch(url, {
       etag: stored.etag ?? undefined,
-      lastModified: stored.lastModified ?? undefined,
+      lastModified: stored.lastModified ?? undefined
     });
     const outcome = classifyConditionalGet(res, stored);
 
@@ -207,11 +207,11 @@ async function conditionalCheck(
 async function fetchSitemap(origin: string, declared: string[]): Promise<SitemapEntry[] | null> {
   try {
     const discovery = await discoverSitemapEntries(origin, declared, {
-      maxUrls: MAX_MONITOR_SITEMAP_URLS,
+      maxUrls: MAX_MONITOR_SITEMAP_URLS
     });
     const entries = discovery.entries.map((entry) => ({
       url: entry.url,
-      lastmod: entry.lastmod ?? null,
+      lastmod: entry.lastmod ?? null
     }));
     return entries.length > 0 ? entries : null;
   } catch {

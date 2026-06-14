@@ -37,7 +37,7 @@ export async function generate(
   env: Env,
   siteId: string,
   runId: string,
-  changeSummary?: string,
+  changeSummary?: string
 ): Promise<GenerationResult> {
   const db = drizzle(env.DB);
 
@@ -76,8 +76,8 @@ export async function generate(
       and(
         eq(pages.siteId, siteId),
         eq(pages.status, "active"),
-        run.startedAt == null ? undefined : gte(pages.lastSeenAt, run.startedAt),
-      ),
+        run.startedAt == null ? undefined : gte(pages.lastSeenAt, run.startedAt)
+      )
     )
     .all();
 
@@ -105,7 +105,7 @@ export async function generate(
       } else {
         console.warn("generate: refined output failed validation, shipping pass 1", {
           siteId,
-          errors: refinedCheck.errors,
+          errors: refinedCheck.errors
         });
       }
     }
@@ -130,7 +130,7 @@ export async function generate(
   const r2Key = `${siteId}/v${version}.txt`;
 
   await env.FILES.put(r2Key, content, {
-    httpMetadata: { contentType: "text/plain; charset=utf-8" },
+    httpMetadata: { contentType: "text/plain; charset=utf-8" }
   });
 
   const now = Math.floor(Date.now() / 1000);
@@ -143,7 +143,7 @@ export async function generate(
       r2Key,
       changeSummary: changeSummary ?? "initial generation",
       generatedBy,
-      createdAt: now,
+      createdAt: now
     });
   } catch (err) {
     const publishedByDuplicate = await existingGeneration();

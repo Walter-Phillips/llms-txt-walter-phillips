@@ -20,7 +20,7 @@ export async function enqueueDueMonitorJobs(env: Env): Promise<void> {
   if (due.length === 0) return;
 
   await env.MONITOR_QUEUE.sendBatch(
-    due.map((s) => ({ body: { type: "check" as const, siteId: s.id } })),
+    due.map((s) => ({ body: { type: "check" as const, siteId: s.id } }))
   );
 }
 

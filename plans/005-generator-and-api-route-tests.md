@@ -86,16 +86,17 @@ Extend that pattern to cover `.select().from().where().get()/.all()` and
 
 ## Commands you will need
 
-| Purpose   | Command                                                     | Expected on success |
-|-----------|-------------------------------------------------------------|---------------------|
-| Probe     | `pnpm --filter @profound-takehome/api test -- index`        | existing /health test passes |
-| Typecheck | `pnpm --filter @profound-takehome/api typecheck`            | exit 0              |
-| Tests     | `pnpm --filter @profound-takehome/api test`                 | all pass            |
-| Full gate | `pnpm verify`                                               | exit 0              |
+| Purpose   | Command                                              | Expected on success          |
+| --------- | ---------------------------------------------------- | ---------------------------- |
+| Probe     | `pnpm --filter @profound-takehome/api test -- index` | existing /health test passes |
+| Typecheck | `pnpm --filter @profound-takehome/api typecheck`     | exit 0                       |
+| Tests     | `pnpm --filter @profound-takehome/api test`          | all pass                     |
+| Full gate | `pnpm verify`                                        | exit 0                       |
 
 ## Scope
 
 **In scope** (create these test files; you may add a tiny shared test helper):
+
 - `apps/api/src/generator/index.test.ts` (create)
 - `apps/api/src/api/sites.test.ts` (create)
 - `apps/api/src/api/jobs.test.ts` (create)
@@ -104,6 +105,7 @@ Extend that pattern to cover `.select().from().where().get()/.all()` and
   (no production imports depend on it).
 
 **Out of scope** (do NOT modify):
+
 - Any production source under `apps/api/src/**`. This is a **tests-only** plan.
   If a function is genuinely untestable without a production change, that's a
   STOP — do not refactor source here.
@@ -125,6 +127,7 @@ Extend that pattern to cover `.select().from().where().get()/.all()` and
 Write `apps/api/src/api/jobs.test.ts` first (simplest: one route, read-only).
 Build the app or router, inject a fake `env` whose `DB` returns a known run row,
 and assert:
+
 - unknown runId → 404;
 - a `done` run → `{ run }` with no `live`;
 - a `crawling` run → `{ run, live }` where `live` comes from a fake
@@ -138,6 +141,7 @@ tests. If not, call the router's handler directly. Lock the approach here.
 ### Step 2: Test `sites.ts` create + monitoring toggle
 
 In `apps/api/src/api/sites.test.ts`:
+
 - `POST /` with an invalid URL (`"not a url"`) → 400 `{ error: "invalid_url" }`.
 - `POST /` with a private/loopback URL (`"http://127.0.0.1"`) → 400
   `{ error: "unresolvable_url" }` (exercises the `normalizeOrigin` gate).
@@ -160,6 +164,7 @@ In `apps/api/src/api/sites.test.ts`:
 In `apps/api/src/generator/index.test.ts`, `vi.mock("./llm", …)` so `refine`
 is controllable. Build a fake `env` with a fake `DB` and a fake `FILES`
 (`put` is a spy; `.select` for `file_versions` returns rows you control). Assert:
+
 - **Idempotent**: when a `file_versions` row already exists for the `runId`,
   `generate()` returns that row, marks the run done, and **does not** call
   `FILES.put` (assert spy not called).
@@ -217,7 +222,7 @@ Stop and report back (do not improvise) if:
 - `app.request(path, init, env)` does not inject the fake bindings and there is
   no clean way to call the handlers directly.
 - The "Current state" excerpts no longer match the source.
-- A new test reveals a real bug (e.g. `generate()` *does* throw on LLM failure
+- A new test reveals a real bug (e.g. `generate()` _does_ throw on LLM failure
   contrary to its contract) — report it as a finding; do not fix source in this
   tests-only plan.
 

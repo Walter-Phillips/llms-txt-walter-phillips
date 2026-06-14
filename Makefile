@@ -1,4 +1,4 @@
-.PHONY: install dev verify lint typecheck test check-docs check-architecture
+.PHONY: install dev verify format format-check lint typecheck test check-docs check-architecture
 
 install:
 	pnpm install
@@ -8,6 +8,12 @@ dev:
 
 verify:
 	pnpm verify
+
+format:
+	pnpm format
+
+format-check:
+	pnpm format:check
 
 lint:
 	pnpm lint

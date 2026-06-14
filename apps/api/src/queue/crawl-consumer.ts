@@ -15,7 +15,7 @@ import type {
   CompleteRequest,
   CompleteResponse,
   SeedRequest,
-  SeedResponse,
+  SeedResponse
 } from "../do/site-coordinator";
 
 const MIN_SITEMAP_URLS = 3;
@@ -40,7 +40,7 @@ export function deriveSignals(input: {
   return {
     pageCount: input.pageCount,
     hasNewsSitemap: input.isNewsSitemap,
-    hasDatedUrls,
+    hasDatedUrls
   };
 }
 
@@ -53,7 +53,7 @@ export async function applyCadencePrior(
   db: Pick<ReturnType<typeof drizzle>, "update">,
   siteId: string,
   trigger: string | undefined,
-  signals: Parameters<typeof deriveSignals>[0],
+  signals: Parameters<typeof deriveSignals>[0]
 ): Promise<void> {
   if (trigger !== "initial") return;
   await db
@@ -108,7 +108,7 @@ async function doCall<T>(stub: DurableObjectStub, path: string, body: unknown): 
   const res = await stub.fetch(`https://do${path}`, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify(body),
+    body: JSON.stringify(body)
   });
   if (!res.ok) throw new Error(`DO ${path} → ${res.status}: ${await res.text()}`);
   return (await res.json()) as T;
@@ -119,14 +119,14 @@ async function enqueuePages(
   env: Env,
   runId: string,
   siteId: string,
-  urls: { url: string; depth: number }[],
+  urls: { url: string; depth: number }[]
 ): Promise<void> {
   if (urls.length === 0) return;
   await env.CRAWL_QUEUE.sendBatch(
     urls.map(({ url, depth }, i) => ({
       body: { type: "page" as const, runId, siteId, url, depth },
-      delaySeconds: Math.floor(i / 4),
-    })),
+      delaySeconds: Math.floor(i / 4)
+    }))
   );
 }
 
@@ -135,7 +135,7 @@ async function failRunAfterEnqueueFailure(
   stub: DurableObjectStub,
   runId: string,
   context: string,
-  err: unknown,
+  err: unknown
 ): Promise<void> {
   const detail = err instanceof Error ? err.message : String(err);
   await db
@@ -143,7 +143,7 @@ async function failRunAfterEnqueueFailure(
     .set({
       status: "error",
       error: `failed to enqueue ${context}: ${detail}`,
-      finishedAt: Math.floor(Date.now() / 1000),
+      finishedAt: Math.floor(Date.now() / 1000)
     })
     .where(eq(crawlRuns.id, runId));
 
@@ -156,7 +156,7 @@ async function failRunAfterEnqueueFailure(
 
 async function handleDiscover(
   env: Env,
-  msg: Extract<CrawlMessage, { type: "discover" }>,
+  msg: Extract<CrawlMessage, { type: "discover" }>
 ): Promise<void> {
   const db = drizzle(env.DB);
   const now = Math.floor(Date.now() / 1000);
@@ -181,8 +181,8 @@ async function handleDiscover(
       origin,
       disallow: robots.disallow,
       discoveryMethod,
-      followLinks: !useSitemap,
-    } satisfies ClaimRequest),
+      followLinks: !useSitemap
+    } satisfies ClaimRequest)
   });
   if (claim.status === 409) {
     await db
@@ -198,7 +198,7 @@ async function handleDiscover(
     runId: msg.runId,
     urls: candidates,
     baseUrl: origin,
-    depth: 0,
+    depth: 0
   } satisfies SeedRequest);
 
   // Persist sitemap lastmod per page now — it's the cheapest monitoring signal
@@ -216,12 +216,12 @@ async function handleDiscover(
             url,
             sitemapLastmod: lastmodByUrl.get(url) ?? null,
             status: "active",
-            lastSeenAt: now,
+            lastSeenAt: now
           })
           .onConflictDoUpdate({
             target: [pages.siteId, pages.url],
-            set: { sitemapLastmod: lastmodByUrl.get(url) ?? null, status: "active" },
-          }),
+            set: { sitemapLastmod: lastmodByUrl.get(url) ?? null, status: "active" }
+          })
       );
     for (let i = 0; i < statements.length; i += 20) {
       const chunk = statements.slice(i, i + 20);
@@ -235,7 +235,7 @@ async function handleDiscover(
       status: "crawling",
       discoveryMethod,
       pagesFound: seeded.accepted.length,
-      startedAt: now,
+      startedAt: now
     })
     .where(eq(crawlRuns.id, msg.runId));
 
@@ -249,7 +249,7 @@ async function handleDiscover(
   await applyCadencePrior(db, msg.siteId, run?.trigger, {
     urls: seeded.accepted.map((p) => p.url),
     pageCount: seeded.accepted.length,
-    isNewsSitemap: useSitemap && sitemap.isNews,
+    isNewsSitemap: useSitemap && sitemap.isNews
   });
 
   if (seeded.accepted.length === 0) {
@@ -288,18 +288,18 @@ async function handlePage(env: Env, msg: Extract<CrawlMessage, { type: "page" }>
         siteId: msg.siteId,
         url: msg.url,
         status: "error",
-        lastSeenAt: now,
+        lastSeenAt: now
       })
       .onConflictDoUpdate({
         target: [pages.siteId, pages.url],
-        set: { status: "error", lastSeenAt: now },
+        set: { status: "error", lastSeenAt: now }
       });
 
   let links: string[] | undefined;
   try {
     const res = await politeFetch(msg.url, {
       etag: existing?.etag ?? undefined,
-      lastModified: existing?.lastModified ?? undefined,
+      lastModified: existing?.lastModified ?? undefined
     });
 
     if (res.status === 304) {
@@ -327,7 +327,7 @@ async function handlePage(env: Env, msg: Extract<CrawlMessage, { type: "page" }>
           etag: res.etag,
           lastModified: res.lastModified,
           status: "active",
-          lastSeenAt: now,
+          lastSeenAt: now
         })
         .onConflictDoUpdate({
           target: [pages.siteId, pages.url],
@@ -341,8 +341,8 @@ async function handlePage(env: Env, msg: Extract<CrawlMessage, { type: "page" }>
             etag: res.etag,
             lastModified: res.lastModified,
             status: "active",
-            lastSeenAt: now,
-          },
+            lastSeenAt: now
+          }
         });
     } else {
       await markError();
@@ -356,7 +356,7 @@ async function handlePage(env: Env, msg: Extract<CrawlMessage, { type: "page" }>
     runId: msg.runId,
     url: msg.url,
     links,
-    depth: msg.depth,
+    depth: msg.depth
   } satisfies CompleteRequest);
 
   try {
@@ -373,7 +373,7 @@ async function handlePage(env: Env, msg: Extract<CrawlMessage, { type: "page" }>
         status: "generating",
         pagesFound: completion.pagesFound,
         pagesCrawled: completion.pagesCrawled,
-        ...(completion.capped ? { capReason: "max_pages" } : {}),
+        ...(completion.capped ? { capReason: "max_pages" } : {})
       })
       .where(eq(crawlRuns.id, msg.runId));
     await env.CRAWL_QUEUE.send({ type: "generate", runId: msg.runId, siteId: msg.siteId });
@@ -382,7 +382,7 @@ async function handlePage(env: Env, msg: Extract<CrawlMessage, { type: "page" }>
 
 async function handleGenerate(
   env: Env,
-  msg: Extract<CrawlMessage, { type: "generate" }>,
+  msg: Extract<CrawlMessage, { type: "generate" }>
 ): Promise<void> {
   const db = drizzle(env.DB);
   const stub = coordinator(env, msg.siteId);
@@ -396,7 +396,7 @@ async function handleGenerate(
       .set({
         status: "error",
         error: err instanceof Error ? err.message : "generation failed",
-        finishedAt: Math.floor(Date.now() / 1000),
+        finishedAt: Math.floor(Date.now() / 1000)
       })
       .where(eq(crawlRuns.id, msg.runId));
     await doCall(stub, "/finish", { runId: msg.runId, phase: "error" });
@@ -406,7 +406,7 @@ async function handleGenerate(
 export async function handleCrawlBatch(
   batch: MessageBatch<CrawlMessage>,
   env: Env,
-  _ctx: ExecutionContext,
+  _ctx: ExecutionContext
 ): Promise<void> {
   for (const msg of batch.messages) {
     try {

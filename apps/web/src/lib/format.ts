@@ -19,7 +19,7 @@ export function formatDate(epoch: number): string {
   return toDate(epoch).toLocaleDateString(undefined, {
     month: "short",
     day: "numeric",
-    year: "numeric",
+    year: "numeric"
   });
 }
 
@@ -28,6 +28,6 @@ export function formatDateTime(epoch: number): string {
     month: "short",
     day: "numeric",
     hour: "numeric",
-    minute: "2-digit",
+    minute: "2-digit"
   });
 }

@@ -36,23 +36,25 @@ a deploy checklist. This is a docs-only change — no behavior moves.
 
 ```md
 <!-- docs/SECURITY.md:10-15 -->
+
 ## Environment Variables
 
-| Name | Required | Description |
-| --- | --- | --- |
-| TBD | No | Add variables as they appear. |
+| Name | Required | Description                   |
+| ---- | -------- | ----------------------------- |
+| TBD  | No       | Add variables as they appear. |
 ```
 
 ```md
 <!-- docs/QUALITY.md:10-18 -->
+
 ## Scorecard
 
-| Area | Grade | Notes |
-| --- | --- | --- |
-| Product behavior | TBD | |
-| Architecture | TBD | |
-| Tests | TBD | |
-| Documentation | TBD | |
+| Area             | Grade | Notes |
+| ---------------- | ----- | ----- |
+| Product behavior | TBD   |       |
+| Architecture     | TBD   |       |
+| Tests            | TBD   |       |
+| Documentation    | TBD   |       |
 ```
 
 The actual env/secret surface (ground truth):
@@ -80,19 +82,21 @@ after the edits.
 
 ## Commands you will need
 
-| Purpose      | Command              | Expected on success |
-|--------------|----------------------|---------------------|
-| Doc check    | `pnpm check-docs`    | exit 0              |
-| Full gate    | `pnpm verify`        | exit 0              |
+| Purpose   | Command           | Expected on success |
+| --------- | ----------------- | ------------------- |
+| Doc check | `pnpm check-docs` | exit 0              |
+| Full gate | `pnpm verify`     | exit 0              |
 
 ## Scope
 
 **In scope** (the only files you should modify):
+
 - `docs/SECURITY.md` — replace the TBD env-var table with the real variables.
 - `docs/QUALITY.md` — replace the TBD scorecard with an honest current-state
   assessment.
 
 **Out of scope** (do NOT touch):
+
 - Any source code, `wrangler.toml`, `.env.example`, or the README. This is
   docs-only. If the docs and code disagree, document what the **code** does and
   note the discrepancy — do not change code to match the docs.
@@ -124,8 +128,8 @@ Queues/DO) as "environment variables" unless you label them clearly as
 Replace the `TBD` table with two short tables (or one table with a Type column).
 Cover at least:
 
-- `ANTHROPIC_API_KEY` — secret — *required for real generation; optional in mock
-  mode (LLM refinement falls back to heuristics if absent)*. Set via
+- `ANTHROPIC_API_KEY` — secret — _required for real generation; optional in mock
+  mode (LLM refinement falls back to heuristics if absent)_. Set via
   `wrangler secret put` in prod, `apps/api/.dev.vars` locally.
 - `APP_ORIGIN` — var (`wrangler.toml [vars]`) — the app's public origin.
 - `NEXT_PUBLIC_API_URL` — web env — Worker base URL (defaults to
@@ -187,7 +191,7 @@ Machine-checkable. ALL must hold:
 
 Stop and report back (do not improvise) if:
 
-- `pnpm check-docs` fails and the failure is about doc *structure* the harness
+- `pnpm check-docs` fails and the failure is about doc _structure_ the harness
   enforces (e.g. a required heading) rather than your content — read
   `scripts/check_harness.py` to learn the contract, but do **not** modify it.
 - `bindings.ts`/`wrangler.toml` reveal an env var or secret not described here —

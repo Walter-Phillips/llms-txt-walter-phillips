@@ -16,7 +16,7 @@ export type FetchResult = {
 
 export async function politeFetch(
   url: string,
-  opts: { etag?: string; lastModified?: string; maxBodyBytes?: number } = {},
+  opts: { etag?: string; lastModified?: string; maxBodyBytes?: number } = {}
 ): Promise<FetchResult> {
   const headers: Record<string, string> = { "user-agent": UA };
   if (opts.etag) headers["if-none-match"] = opts.etag;
@@ -25,7 +25,7 @@ export async function politeFetch(
   const res = await fetch(url, {
     headers,
     redirect: "follow",
-    signal: AbortSignal.timeout(TIMEOUT_MS),
+    signal: AbortSignal.timeout(TIMEOUT_MS)
   });
 
   if (res.url) {
@@ -50,7 +50,7 @@ export async function politeFetch(
     etag: res.headers.get("etag"),
     lastModified: res.headers.get("last-modified"),
     contentType: res.headers.get("content-type"),
-    contentEncoding: res.headers.get("content-encoding"),
+    contentEncoding: res.headers.get("content-encoding")
   };
 }
 
@@ -62,7 +62,7 @@ export function isHtml(contentType: string | null): boolean {
 /** Read a body stream as text, hard-capped at maxBytes (cancels the rest). */
 export async function readBodyText(
   body: ReadableStream<Uint8Array>,
-  maxBytes = MAX_BODY_BYTES,
+  maxBytes = MAX_BODY_BYTES
 ): Promise<string> {
   const reader = body.getReader();
   const decoder = new TextDecoder();

@@ -10,20 +10,20 @@ session — everything needed is inlined in each file.
 
 ## Execution order & status
 
-| Plan | Title | Priority | Effort | Depends on | Status |
-|------|-------|----------|--------|------------|--------|
-| 001  | SSRF: reject internal/metadata targets via redirects, IPv6, encoded IPs | P1 | M | — | DONE |
-| 002  | Upgrade drizzle-orm past GHSA-gpj5-g38j-94v9 (HIGH SQLi advisory) | P1 | S | — | DONE |
-| 003  | Characterization tests for SiteCoordinator (frontier/budget/mutex) | P1 | M | — | DONE |
-| 004  | Make `/complete` idempotent against retried queue messages | P2 | S | 003 | DONE |
-| 005  | Tests for the `generate()` pipeline + HTTP API routes | P2 | M | — | DONE |
-| 006  | Compile-time guard against api / mock-api client drift | P3 | S | — | DONE |
-| 007  | Consolidate duplicated URL-path-depth logic | P3 | S | — | DONE |
-| 008  | Add `pages(site_id,status)` index + Map lookup in monitor | P3 | S | — | DONE |
-| 009  | Fill the TBD SECURITY/QUALITY docs | P3 | S | — | DONE |
-| 010  | (spike) Wire RATE_LIMIT KV to protect the no-auth API | P3 | M | — | DONE |
-| 011  | (spike) Surface crawl-cap reasons to the user | P3 | M | — | DONE |
-| 012  | (spike) Surface which generation pass produced the file | P3 | M | — | DONE |
+| Plan | Title                                                                   | Priority | Effort | Depends on | Status |
+| ---- | ----------------------------------------------------------------------- | -------- | ------ | ---------- | ------ |
+| 001  | SSRF: reject internal/metadata targets via redirects, IPv6, encoded IPs | P1       | M      | —          | DONE   |
+| 002  | Upgrade drizzle-orm past GHSA-gpj5-g38j-94v9 (HIGH SQLi advisory)       | P1       | S      | —          | DONE   |
+| 003  | Characterization tests for SiteCoordinator (frontier/budget/mutex)      | P1       | M      | —          | DONE   |
+| 004  | Make `/complete` idempotent against retried queue messages              | P2       | S      | 003        | DONE   |
+| 005  | Tests for the `generate()` pipeline + HTTP API routes                   | P2       | M      | —          | DONE   |
+| 006  | Compile-time guard against api / mock-api client drift                  | P3       | S      | —          | DONE   |
+| 007  | Consolidate duplicated URL-path-depth logic                             | P3       | S      | —          | DONE   |
+| 008  | Add `pages(site_id,status)` index + Map lookup in monitor               | P3       | S      | —          | DONE   |
+| 009  | Fill the TBD SECURITY/QUALITY docs                                      | P3       | S      | —          | DONE   |
+| 010  | (spike) Wire RATE_LIMIT KV to protect the no-auth API                   | P3       | M      | —          | DONE   |
+| 011  | (spike) Surface crawl-cap reasons to the user                           | P3       | M      | —          | DONE   |
+| 012  | (spike) Surface which generation pass produced the file                 | P3       | M      | —          | DONE   |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | REJECTED (one-line rationale)
 
@@ -33,7 +33,7 @@ Highest leverage first; security and the correctness/test pair lead:
 
 1. **001, 002** — security: close the SSRF gap and clear the HIGH dependency
    advisory. Independent of everything; do them first.
-2. **003 → 004** — land the SiteCoordinator characterization tests, *then* the
+2. **003 → 004** — land the SiteCoordinator characterization tests, _then_ the
    `/complete` idempotency fix against them. **004 must not start before 003.**
 3. **005** — generator + API route tests; independent, high value, shares the
    D1-faking approach you'll establish anyway.
@@ -61,7 +61,7 @@ Vetted during the audit and deliberately **not** turned into plans:
 
 - **"Page extraction failure stalls the crawl forever"** (reported as a critical
   bug): FALSE. In `crawl-consumer.ts`, the `/complete` DO call (line 355) is
-  *outside* the `try/catch` that ends at line 353, so a failed page is always
+  _outside_ the `try/catch` that ends at line 353, so a failed page is always
   reported complete and the frontier drains. Misread by the audit; confirmed by
   reading the control flow.
 - **"Committed Anthropic API key in `apps/api/.dev.vars`"** (reported HIGH):
@@ -77,11 +77,11 @@ Vetted during the audit and deliberately **not** turned into plans:
   (transitive via `next`).
 - **SiteCoordinator in-memory data race on `inFlight`**: rejected as framed.
   Cloudflare Durable Objects serialize requests to a single object, so there's no
-  concurrent in-memory mutation. The *real* issue in that area is queue-retry
+  concurrent in-memory mutation. The _real_ issue in that area is queue-retry
   idempotency, which is captured as plan 004.
 - **Unified-diff zero-count hunk "off-by-one"** (`files.ts:249`): not a bug — the
   `oldCount === 0 ? oldAt[start] : oldAt[start] + 1` logic is the correct
-  unified-diff convention (a zero-count side reports the line *before*).
+  unified-diff convention (a zero-count side reports the line _before_).
 - **CORS `cors()` allow-all on `/api/*`**: low-risk, not plan-worthy. No
   credentials are allowed and there is no auth/cookie surface, so permissive CORS
   exposes nothing a direct request couldn't already reach. `/sites/*` CORS is

@@ -9,7 +9,7 @@ const STEPS = [
   { key: "discovering", label: "Discovering" },
   { key: "crawling", label: "Crawling" },
   { key: "generating", label: "Generating" },
-  { key: "done", label: "Done" },
+  { key: "done", label: "Done" }
 ] as const;
 
 type StepKey = (typeof STEPS)[number]["key"];
@@ -80,7 +80,10 @@ export function ProgressView({ runId, domain, onDone, pollIntervalMs }: Progress
           {friendlyRunError(run.error)}
         </p>
         <p className="mt-6 text-sm">
-          <Link href="/" className="underline decoration-dotted underline-offset-4 hover:text-accent">
+          <Link
+            href="/"
+            className="underline decoration-dotted underline-offset-4 hover:text-accent"
+          >
             ← Try another URL
           </Link>
         </p>
@@ -101,7 +104,8 @@ export function ProgressView({ runId, domain, onDone, pollIntervalMs }: Progress
 
       <ol className="mt-8 space-y-0">
         {STEPS.map((step, idx) => {
-          const state = idx < currentIdx || isDone ? "done" : idx === currentIdx ? "active" : "todo";
+          const state =
+            idx < currentIdx || isDone ? "done" : idx === currentIdx ? "active" : "todo";
           return (
             <li
               key={step.key}
@@ -115,7 +119,11 @@ export function ProgressView({ runId, domain, onDone, pollIntervalMs }: Progress
             >
               <span
                 className={`w-6 text-xs ${
-                  state === "done" ? "text-moss" : state === "active" ? "text-accent" : "text-ink-soft/50"
+                  state === "done"
+                    ? "text-moss"
+                    : state === "active"
+                      ? "text-accent"
+                      : "text-ink-soft/50"
                 }`}
                 aria-hidden
               >
@@ -142,9 +150,7 @@ export function ProgressView({ runId, domain, onDone, pollIntervalMs }: Progress
       </ol>
 
       {pollError ? (
-        <p className="mt-6 text-xs text-accent">
-          Connection hiccup — retrying. ({pollError})
-        </p>
+        <p className="mt-6 text-xs text-accent">Connection hiccup — retrying. ({pollError})</p>
       ) : null}
     </div>
   );

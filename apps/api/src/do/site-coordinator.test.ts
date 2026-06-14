@@ -1,18 +1,15 @@
 import { describe, expect, it, vi } from "vitest";
 import { MAX_DEPTH, MAX_PAGES } from "../crawler/frontier";
 
-vi.mock(
-  "cloudflare:workers",
-  () => ({
-    DurableObject: class {
-      protected ctx: DurableObjectState;
+vi.mock("cloudflare:workers", () => ({
+  DurableObject: class {
+    protected ctx: DurableObjectState;
 
-      constructor(ctx: DurableObjectState) {
-        this.ctx = ctx;
-      }
-    },
-  }),
-);
+    constructor(ctx: DurableObjectState) {
+      this.ctx = ctx;
+    }
+  }
+}));
 
 const { SiteCoordinator } = await import("./site-coordinator");
 type Coordinator = InstanceType<typeof SiteCoordinator>;
@@ -21,7 +18,7 @@ function fakeStorage() {
   const map = new Map<string, unknown>();
   return {
     get: async (key: string) => map.get(key),
-    put: async (key: string, value: unknown) => void map.set(key, value),
+    put: async (key: string, value: unknown) => void map.set(key, value)
   };
 }
 
@@ -33,12 +30,16 @@ function coordinator(): Coordinator {
   return new SiteCoordinator(fakeCtx(), {} as never);
 }
 
-async function post<T>(co: Coordinator, path: string, body: unknown): Promise<{ status: number; body: T }> {
+async function post<T>(
+  co: Coordinator,
+  path: string,
+  body: unknown
+): Promise<{ status: number; body: T }> {
   const res = await co.fetch(
     new Request(`https://do${path}`, {
       method: "POST",
-      body: JSON.stringify(body),
-    }),
+      body: JSON.stringify(body)
+    })
   );
   return { status: res.status, body: (await res.json()) as T };
 }
@@ -56,14 +57,14 @@ async function status(co: Coordinator): Promise<{
 async function claim(
   co: Coordinator,
   runId: string,
-  opts: Partial<{ followLinks: boolean; origin: string }> = {},
+  opts: Partial<{ followLinks: boolean; origin: string }> = {}
 ) {
   return post(co, "/claim", {
     runId,
     origin: opts.origin ?? "https://example.com",
     disallow: [],
     discoveryMethod: "sitemap",
-    followLinks: opts.followLinks ?? false,
+    followLinks: opts.followLinks ?? false
   });
 }
 
@@ -79,7 +80,7 @@ describe("SiteCoordinator", () => {
     const conflict = await claim(co, "run-b");
     expect(conflict).toMatchObject({
       status: 409,
-      body: { error: "run_in_progress", runId: "run-a" },
+      body: { error: "run_in_progress", runId: "run-a" }
     });
 
     await post(co, "/finish", { runId: "run-a", phase: "done" });
@@ -94,7 +95,7 @@ describe("SiteCoordinator", () => {
       runId: "run-b",
       urls: ["https://example.com/a"],
       baseUrl: "https://example.com/",
-      depth: 0,
+      depth: 0
     });
 
     expect(seeded.body.accepted).toEqual([]);
@@ -110,7 +111,7 @@ describe("SiteCoordinator", () => {
       runId: "run-a",
       urls: [urls[0]!, ...urls, "https://other.test/x"],
       baseUrl: "https://example.com/",
-      depth: 0,
+      depth: 0
     });
 
     expect(seeded.body.accepted).toHaveLength(MAX_PAGES);
@@ -125,13 +126,13 @@ describe("SiteCoordinator", () => {
       runId: "run-a",
       urls: ["https://example.com/a"],
       baseUrl: "https://example.com/",
-      depth: 0,
+      depth: 0
     });
 
     const completed = await post<{ drained: boolean; pagesCrawled: number }>(co, "/complete", {
       runId: "run-a",
       url: "https://example.com/a",
-      depth: 0,
+      depth: 0
     });
 
     expect(completed.body).toMatchObject({ drained: true, pagesCrawled: 1 });
@@ -145,7 +146,7 @@ describe("SiteCoordinator", () => {
       runId: "run-a",
       urls: ["https://example.com/a", "https://example.com/deep"],
       baseUrl: "https://example.com/",
-      depth: 0,
+      depth: 0
     });
 
     const belowCap = await post<{ accepted: { url: string; depth: number }[]; drained: boolean }>(
@@ -155,8 +156,8 @@ describe("SiteCoordinator", () => {
         runId: "run-a",
         url: "https://example.com/a",
         links: ["https://example.com/b"],
-        depth: MAX_DEPTH - 1,
-      },
+        depth: MAX_DEPTH - 1
+      }
     );
     expect(belowCap.body.accepted).toEqual([{ url: "https://example.com/b", depth: MAX_DEPTH }]);
     expect(belowCap.body.drained).toBe(false);
@@ -165,7 +166,7 @@ describe("SiteCoordinator", () => {
       runId: "run-a",
       url: "https://example.com/deep",
       links: ["https://example.com/c"],
-      depth: MAX_DEPTH,
+      depth: MAX_DEPTH
     });
     expect(atCap.body.accepted).toEqual([]);
   });
@@ -177,7 +178,7 @@ describe("SiteCoordinator", () => {
       runId: "run-a",
       urls: ["https://example.com/a"],
       baseUrl: "https://example.com/",
-      depth: 0,
+      depth: 0
     });
 
     const completed = await post<{
@@ -185,22 +186,18 @@ describe("SiteCoordinator", () => {
       pagesCrawled: number;
       drained: boolean;
       capped: boolean;
-    }>(
-      co,
-      "/complete",
-      {
-        runId: "run-b",
-        url: "https://example.com/a",
-        depth: 0,
-      },
-    );
+    }>(co, "/complete", {
+      runId: "run-b",
+      url: "https://example.com/a",
+      depth: 0
+    });
 
     expect(completed.body).toEqual({
       accepted: [],
       drained: false,
       pagesFound: 0,
       pagesCrawled: 0,
-      capped: false,
+      capped: false
     });
     expect(await status(co)).toMatchObject({ pagesFound: 1, pagesCrawled: 0 });
   });
@@ -213,13 +210,13 @@ describe("SiteCoordinator", () => {
       runId: "run-a",
       urls,
       baseUrl: "https://example.com/",
-      depth: 0,
+      depth: 0
     });
 
     const completed = await post<{ capped: boolean }>(co, "/complete", {
       runId: "run-a",
       url: "https://example.com/p0",
-      depth: 0,
+      depth: 0
     });
 
     expect(completed.body.capped).toBe(true);
@@ -232,14 +229,14 @@ describe("SiteCoordinator", () => {
       runId: "run-a",
       urls: ["https://example.com/a"],
       baseUrl: "https://example.com/",
-      depth: 0,
+      depth: 0
     });
 
     await post(co, "/complete", { runId: "run-a", url: "https://example.com/a", depth: 0 });
     const duplicate = await post<{ pagesCrawled: number }>(co, "/complete", {
       runId: "run-a",
       url: "https://example.com/a",
-      depth: 0,
+      depth: 0
     });
 
     expect(duplicate.body.pagesCrawled).toBe(1);
@@ -252,7 +249,7 @@ describe("SiteCoordinator", () => {
       runId: "run-a",
       urls: ["https://example.com/a", "https://example.com/b"],
       baseUrl: "https://example.com/",
-      depth: 0,
+      depth: 0
     });
 
     await post(co, "/complete", { runId: "run-a", url: "https://example.com/a", depth: 0 });
@@ -260,7 +257,7 @@ describe("SiteCoordinator", () => {
     const completed = await post<{ pagesCrawled: number; drained: boolean }>(co, "/complete", {
       runId: "run-a",
       url: "https://example.com/b",
-      depth: 0,
+      depth: 0
     });
 
     expect(completed.body).toMatchObject({ pagesCrawled: 2, drained: true });

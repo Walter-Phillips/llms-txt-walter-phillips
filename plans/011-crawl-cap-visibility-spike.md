@@ -24,7 +24,7 @@ depth"). That's correct — but it's **silent**. A user who submits a 10,000-pag
 docs site gets an llms.txt covering 1,000 pages with no indication the crawl was
 capped, why, or what was left out. The page-inventory table
 (`apps/web/src/components/result-view.tsx` / `page-inventory.tsx`) shows what
-*was* crawled but not that more *existed*. Surfacing a cap reason turns a
+_was_ crawled but not that more _existed_. Surfacing a cap reason turns a
 confusing silent truncation into an honest "limited to 1,000 pages (site is
 larger)" signal — building trust in a product whose whole pitch is an accurate,
 maintained file. This spike designs the data flow and lands a typed slice.
@@ -33,7 +33,7 @@ maintained file. This spike designs the data flow and lands a typed slice.
 
 - `apps/api/src/crawler/frontier.ts:6-7` — `MAX_PAGES = 1_000`, `MAX_DEPTH = 3`.
   `acceptUrls` (lines 32-59) stops admitting at `pageBudget` but returns no
-  signal about *why* it stopped.
+  signal about _why_ it stopped.
 - `apps/api/src/do/site-coordinator.ts:160-177` — `admit` computes
   `pageBudget = Math.max(0, MAX_PAGES - pagesFound)`; when the budget hits 0,
   further candidates are silently dropped. The DO knows `pagesFound` vs.
@@ -61,7 +61,7 @@ maintained file. This spike designs the data flow and lands a typed slice.
      and how it propagates: DO state → `CompleteResponse`/run update →
      `crawl_runs.cap_reason` → shared contract → job/site response → UI badge.
    - The migration + schema change required.
-   - Open questions: do we count *how many* pages were skipped (needs the DO to
+   - Open questions: do we count _how many_ pages were skipped (needs the DO to
      track dropped candidates) or just a boolean reason? Recommend the simpler
      reason-only first.
 2. **A thin typed slice** proving the data path end-to-end for `max_pages`:
@@ -72,18 +72,19 @@ maintained file. This spike designs the data flow and lands a typed slice.
 
 ## Commands you will need
 
-| Purpose          | Command                                          | Expected on success |
-|------------------|--------------------------------------------------|---------------------|
-| API typecheck    | `pnpm --filter @profound-takehome/api typecheck` | exit 0              |
-| DB typecheck     | `pnpm --filter @profound-takehome/db typecheck`  | exit 0              |
-| Web typecheck    | `pnpm --filter @profound-takehome/web typecheck` | exit 0              |
-| Tests            | `pnpm test`                                      | all pass            |
-| Doc check        | `pnpm check-docs`                                | exit 0              |
-| Full gate        | `pnpm verify`                                    | exit 0              |
+| Purpose       | Command                                          | Expected on success |
+| ------------- | ------------------------------------------------ | ------------------- |
+| API typecheck | `pnpm --filter @profound-takehome/api typecheck` | exit 0              |
+| DB typecheck  | `pnpm --filter @profound-takehome/db typecheck`  | exit 0              |
+| Web typecheck | `pnpm --filter @profound-takehome/web typecheck` | exit 0              |
+| Tests         | `pnpm test`                                      | all pass            |
+| Doc check     | `pnpm check-docs`                                | exit 0              |
+| Full gate     | `pnpm verify`                                    | exit 0              |
 
 ## Scope
 
 **In scope** (thin slice):
+
 - `docs/exec-plans/crawl-cap-visibility.md` (create).
 - `packages/db/src/schema.ts` — add `capReason: text("cap_reason")` (nullable) to `crawl_runs`.
 - `packages/db/migrations/00NN_crawl_cap_reason.sql` (create) — `ALTER TABLE crawl_runs ADD COLUMN cap_reason TEXT;` (use the next free migration number).
@@ -94,6 +95,7 @@ maintained file. This spike designs the data flow and lands a typed slice.
 - Tests: extend the DO test (plan 003) and a shared-contract test for the new field.
 
 **Out of scope** (STOP if pulled here):
+
 - Raising or making `MAX_PAGES`/`MAX_DEPTH` user-configurable (that's a Non-Goal
   direction — note as an open question, don't build).
 - `max_depth` and `robots_disallow` reasons in the first slice (mention in the
@@ -165,6 +167,7 @@ site is larger."). Keep it minimal and accessible.
 ## STOP conditions
 
 Stop and report back if:
+
 - Distinguishing "capped by budget" from "fewer candidates than budget" turns
   out to require more DO bookkeeping than a boolean (report; propose the smaller
   version).
@@ -175,7 +178,7 @@ Stop and report back if:
 ## Maintenance notes
 
 - Start with `max_pages` only. Adding `max_depth`/`robots_disallow` later is
-  additive (same column, more values) — but verify each is *actionable* to the
+  additive (same column, more values) — but verify each is _actionable_ to the
   user before surfacing it; noise erodes trust as much as silence.
 - A reviewer should confirm the cap detection doesn't misfire on normal small
   crawls (a 5-page site must report no cap).

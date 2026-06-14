@@ -63,7 +63,7 @@ class FakeSelect {
 
   then<TResult1 = unknown[], TResult2 = never>(
     onfulfilled?: ((value: unknown[]) => TResult1 | PromiseLike<TResult1>) | null,
-    onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null,
+    onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null
   ) {
     return this.all().then(onfulfilled, onrejected);
   }
@@ -96,7 +96,7 @@ export class FakeDb {
     return {
       values: async (values: Record<string, unknown>) => {
         this.inserts.push({ table: tableName(table), values });
-      },
+      }
     };
   }
 
@@ -105,7 +105,7 @@ export class FakeDb {
       set: (values: Record<string, unknown>) => {
         this.updates.push({ table: tableName(table), values });
         return { where: async () => undefined };
-      },
+      }
     };
   }
 }
@@ -120,12 +120,12 @@ export function createTestEnv(db: FakeDb, overrides: Partial<Env> = {}): Env {
     SITE_COORDINATOR: {
       idFromName: vi.fn((name: string) => name),
       get: vi.fn(() => ({
-        fetch: vi.fn(async () => Response.json({})),
-      })),
+        fetch: vi.fn(async () => Response.json({}))
+      }))
     } as unknown as DurableObjectNamespace,
     ANTHROPIC_API_KEY: "test-key",
     APP_ORIGIN: "https://app.example.com",
-    ...overrides,
+    ...overrides
   };
 }
 
@@ -134,7 +134,7 @@ export function createSiteCoordinator(live: unknown) {
   const stub = { fetch };
   const namespace = {
     idFromName: vi.fn((name: string) => name),
-    get: vi.fn(() => stub),
+    get: vi.fn(() => stub)
   };
   return { namespace: namespace as unknown as DurableObjectNamespace, fetch };
 }
