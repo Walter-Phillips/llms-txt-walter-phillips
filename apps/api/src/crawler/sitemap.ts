@@ -68,21 +68,52 @@ export async function discoverSitemapEntries(
   origin: string,
   declared: string[],
 ): Promise<SitemapDiscovery> {
-  const queue = declared.length
-    ? [...declared]
-    : [`${origin}/sitemap.xml`, `${origin}/sitemap_index.xml`];
-  const visited = new Set<string>();
-  const found: string[] = [];
-  const entries: SitemapEntry[] = [];
-  const seenUrls = new Set<string>();
-  let isNews = false;
-  let fetches = 0;
+  const state: DiscoveryState = {
+    visited: new Set<string>(),
+    found: [],
+    entries: [],
+    seenUrls: new Set<string>(),
+    isNews: false,
+    fetches: 0,
+  };
 
-  while (queue.length > 0 && fetches < MAX_CHILD_SITEMAPS) {
+  await drainSitemapQueue([...declared], state);
+
+  // If the declared sitemaps yielded nothing (e.g. a robots.txt that declares a
+  // stale/404ing sitemap URL), fall back to the conventional paths that we have
+  // not already fetched. The MAX_CHILD_SITEMAPS budget is shared across passes.
+  if (state.entries.length === 0) {
+    const conventional = [`${origin}/sitemap.xml`, `${origin}/sitemap_index.xml`].filter(
+      (u) => !state.visited.has(u),
+    );
+    await drainSitemapQueue(conventional, state);
+  }
+
+  return { entries: prioritizeShallow(state.entries), isNews: state.isNews, found: state.found };
+}
+
+type DiscoveryState = {
+  visited: Set<string>;
+  found: string[];
+  entries: SitemapEntry[];
+  seenUrls: Set<string>;
+  isNews: boolean;
+  fetches: number;
+};
+
+/**
+ * Fetch/parse every URL reachable from `seed`, recursing into index files,
+ * accumulating into the shared `state`. Respects the global MAX_CHILD_SITEMAPS
+ * fetch budget and is soft-failing — unreachable URLs contribute nothing.
+ */
+async function drainSitemapQueue(seed: string[], state: DiscoveryState): Promise<void> {
+  const queue = [...seed];
+
+  while (queue.length > 0 && state.fetches < MAX_CHILD_SITEMAPS) {
     const url = queue.shift()!;
-    if (visited.has(url)) continue;
-    visited.add(url);
-    fetches++;
+    if (state.visited.has(url)) continue;
+    state.visited.add(url);
+    state.fetches++;
 
     let xml: string;
     try {
@@ -94,20 +125,18 @@ export async function discoverSitemapEntries(
     }
 
     const parsed = parseSitemapXml(xml);
-    found.push(url);
+    state.found.push(url);
     if (parsed.kind === "index") {
       queue.push(...parsed.sitemaps);
     } else {
-      isNews ||= parsed.isNews;
+      state.isNews ||= parsed.isNews;
       for (const e of parsed.entries) {
-        if (!seenUrls.has(e.url)) {
-          seenUrls.add(e.url);
-          entries.push(e);
+        if (!state.seenUrls.has(e.url)) {
+          state.seenUrls.add(e.url);
+          state.entries.push(e);
         }
       }
-      if (entries.length >= MAX_SITEMAP_URLS * 3) break; // enough raw candidates
+      if (state.entries.length >= MAX_SITEMAP_URLS * 3) break; // enough raw candidates
     }
   }
-
-  return { entries: prioritizeShallow(entries), isNews, found };
 }
