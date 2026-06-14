@@ -4,7 +4,7 @@ import { nanoid } from "nanoid";
 import { crawlRuns, pages, sites } from "@profound-takehome/db";
 import type { CrawlMessage, Env } from "../bindings";
 import { fetchRobots } from "../crawler/robots";
-import { discoverSitemapEntries } from "../crawler/sitemap";
+import { discoverSitemapEntries, type SitemapEntry } from "../crawler/sitemap";
 import { politeFetch, isHtml } from "../crawler/fetcher";
 import { extract } from "../crawler/extract";
 import { classify } from "../generator/heuristics";
@@ -60,6 +60,44 @@ export async function applyCadencePrior(
     .update(sites)
     .set({ checkIntervalS: initialInterval(deriveSignals(signals)) })
     .where(eq(sites.id, siteId));
+}
+
+/**
+ * Some hosts (e.g. GitHub Pages on a custom domain) publish a sitemap whose
+ * every `<loc>` points to the canonical host rather than the domain the user
+ * entered. Left alone, the SiteCoordinator's same-origin frontier rejects every
+ * such entry and the run errors with "no crawlable pages found".
+ *
+ * When the entries form a single foreign origin we treat that origin as a
+ * canonical-host alias and rewrite each url onto the entered origin, preserving
+ * path/query/hash and lastmod. Mixed or already-same-origin sets are left
+ * untouched so the frontier still drops genuinely-external URLs.
+ */
+export function aliasSitemapEntries(entries: SitemapEntry[], origin: string): SitemapEntry[] {
+  const enteredOrigin = new URL(origin).origin;
+  const origins = new Set<string>();
+  for (const entry of entries) {
+    try {
+      origins.add(new URL(entry.url).origin);
+    } catch {
+      // Skip unparseable urls when counting distinct origins.
+    }
+  }
+
+  // Only rewrite a clean single-foreign-origin set; mixed or same-origin sets
+  // keep their urls so the same-origin frontier filter still applies.
+  if (origins.size !== 1) return entries;
+  const [only] = origins;
+  if (only === enteredOrigin) return entries;
+
+  return entries.map((entry) => {
+    try {
+      const parsed = new URL(entry.url);
+      return { ...entry, url: `${enteredOrigin}${parsed.pathname}${parsed.search}${parsed.hash}` };
+    } catch {
+      return entry;
+    }
+  });
 }
 
 function coordinator(env: Env, siteId: string): DurableObjectStub {
@@ -127,7 +165,11 @@ async function handleDiscover(
   const robots = await fetchRobots(origin);
   const sitemap = await discoverSitemapEntries(origin, robots.sitemaps);
 
-  const useSitemap = sitemap.entries.length >= MIN_SITEMAP_URLS;
+  // Rewrite canonical-host aliases (e.g. GitHub Pages custom domains) onto the
+  // entered origin so the same-origin frontier accepts them downstream.
+  const entries = aliasSitemapEntries(sitemap.entries, origin);
+
+  const useSitemap = entries.length >= MIN_SITEMAP_URLS;
   const discoveryMethod = useSitemap ? "sitemap" : "links";
 
   const stub = coordinator(env, msg.siteId);
@@ -151,7 +193,7 @@ async function handleDiscover(
   }
   if (!claim.ok) throw new Error(`DO claim → ${claim.status}`);
 
-  const candidates = useSitemap ? sitemap.entries.map((e) => e.url) : [`${origin}/`];
+  const candidates = useSitemap ? entries.map((e) => e.url) : [`${origin}/`];
   const seeded = await doCall<SeedResponse>(stub, "/seed", {
     runId: msg.runId,
     urls: candidates,
@@ -162,7 +204,7 @@ async function handleDiscover(
   // Persist sitemap lastmod per page now — it's the cheapest monitoring signal
   // later, and the page consumer doesn't see sitemap data.
   if (useSitemap) {
-    const lastmodByUrl = new Map(sitemap.entries.map((e) => [e.url, e.lastmod ?? null]));
+    const lastmodByUrl = new Map(entries.map((e) => [e.url, e.lastmod ?? null]));
     const statements = seeded.accepted
       .filter(({ url }) => lastmodByUrl.get(url) !== undefined)
       .map(({ url }) =>
