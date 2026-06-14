@@ -234,6 +234,30 @@ describe("refineWithCaller", () => {
     const urls = result!.inventory.sections.flatMap((s) => s.pages.map((p) => p.url));
     expect(urls).toContain("https://acme.dev/docs");
   });
+
+  it("caps the LLM prompt inventory at 1000 pages", async () => {
+    const pages = Array.from({ length: 1_001 }, (_, i) => page(`https://acme.dev/docs/${i}`));
+    const largeInventory: Inventory = {
+      ...inventory(),
+      sections: [{ name: "Documentation", pages }],
+      optional: [],
+    };
+    let prompt = "";
+    const caller = vi.fn(async (input: string) => {
+      prompt = input;
+      return {
+        summary: "Acme developer tools.",
+        sections: [{ name: "Docs", pages: [{ url: "https://acme.dev/docs/0" }] }],
+        optional: [],
+      };
+    });
+
+    await refineWithCaller(largeInventory, caller);
+
+    const payload = JSON.parse(prompt.split("Inventory (JSON):\n")[1]!);
+    expect(payload.sections[0].pages).toHaveLength(1_000);
+    expect(payload.sections[0].pages.at(-1).url).toBe("https://acme.dev/docs/999");
+  });
 });
 
 describe("refine", () => {

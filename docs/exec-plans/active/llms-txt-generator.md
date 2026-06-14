@@ -135,11 +135,11 @@ Indexes: `sites(monitoring, next_check_at)` for the cron sweep; `pages(site_id, 
 - Fetch declared sitemaps + conventional fallbacks (`/sitemap.xml`, `/sitemap_index.xml`).
 - Sitemap-index files handled recursively (cap: 10 child sitemaps).
 - `<loc>` + `<lastmod>` extracted; lastmod persisted on the page row for monitoring.
-- Candidate URLs capped (default 100), prioritizing shallow paths.
+- Candidate URLs capped (default 1,000), prioritizing shallow paths.
 
 ### 5.4 Stage 3: BFS link crawl  *(built — `crawler/frontier.ts` + page consumer link extraction)*
 Triggered when sitemap yields fewer than 3 URLs (constant in `crawl-consumer.ts`).
-- Root, same-origin only, max depth 3, page cap 100.
+- Root, same-origin only, max depth 3, page cap 1,000.
 - URL normalization: strip fragments, tracking params, trailing-slash canonicalization, lowercased host.
 - Path blocklist: `/search`, `/login`, `/cart`, `/wp-admin`, deep pagination.
 - Respects robots disallow.
@@ -186,7 +186,7 @@ Homepage represented by H1 + blockquote, never as a link. Site name resolved fro
 
 ### 6.2 Pass 2 — LLM refinement  *(built — `generator/llm.ts`)*
 Anthropic Claude (Sonnet) with forced tool use for structured output.
-- Input: structured JSON inventory (site name, homepage snippet, sections, page titles/descriptions/paths). Pages capped at 150; long fields truncated.
+- Input: structured JSON inventory (site name, homepage snippet, sections, page titles/descriptions/paths). Pages capped at 1,000; long fields truncated.
 - Tool schema (zod-validated): `{ summary, sections: [{ name, pages: [{ url, description }] }], optional: [...] }`.
 - Output sanitized: summary trimmed to 400 chars, section names 80, descriptions 200.
 - **URL allow-list:** any URL the model returns that isn't in the input inventory is silently dropped during mapping. Hallucination is structurally impossible.

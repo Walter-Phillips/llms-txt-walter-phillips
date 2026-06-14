@@ -22,3 +22,15 @@
 - Mock-only behavior is intentionally limited to UI development and demos; use
   Wrangler local infra for persistence, bindings, queue, Durable Object, and
   request/response integration checks.
+
+## Crawl Discovery
+
+- Sitemap discovery starts from `robots.txt` declarations and falls back to
+  `/sitemap.xml` plus `/sitemap_index.xml` when those declarations are missing
+  or stale.
+- Supported sitemap sources are XML `urlset`, XML `sitemapindex` with recursive
+  child fetching, plain text URL lists, RSS/Atom feeds, and `.gz` sitemap bodies.
+- Page fetches keep the small default body cap; sitemap fetches use a separate
+  protocol-sized cap so large partitioned sitemaps can still seed the bounded
+  crawl frontier.
+- Crawl admission and LLM refinement input are capped at 1,000 pages per run.

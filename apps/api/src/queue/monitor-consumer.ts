@@ -6,6 +6,8 @@ import { summarizeChanges } from "@profound-takehome/shared";
 import type { Env, MonitorMessage } from "../bindings";
 import { isHtml, politeFetch } from "../crawler/fetcher";
 import { extract } from "../crawler/extract";
+import { fetchRobots } from "../crawler/robots";
+import { discoverSitemapEntries } from "../crawler/sitemap";
 import {
   buildChangeSet,
   classifyConditionalGet,
@@ -18,6 +20,7 @@ import { nextInterval, nextStreak } from "../monitor/schedule";
 
 /** Hard cap on outbound requests per check (sitemap fetch excluded). */
 const MAX_CONDITIONAL_GETS = 30;
+const MAX_MONITOR_SITEMAP_URLS = 1_000;
 
 /**
  * monitor-queue consumer. For each due site:
@@ -65,7 +68,8 @@ async function checkSite(env: Env, siteId: string): Promise<void> {
     .from(pages)
     .where(and(eq(pages.siteId, siteId), eq(pages.status, "active")));
 
-  const sitemap = await fetchSitemap(site.domain);
+  const robots = await fetchRobots(site.domain);
+  const sitemap = await fetchSitemap(site.domain, robots.sitemaps);
   const conditional: { url: string; outcome: ConditionalOutcome }[] = [];
   const hashes: { url: string; storedHash: string | null; currentHash: string | null }[] = [];
   let sitemapDiff;
@@ -199,44 +203,19 @@ async function conditionalCheck(
   }
 }
 
-async function fetchSitemap(origin: string): Promise<SitemapEntry[] | null> {
+async function fetchSitemap(origin: string, declared: string[]): Promise<SitemapEntry[] | null> {
   try {
-    const res = await politeFetch(`${origin}/sitemap.xml`);
-    if (res.status !== 200 || !res.body) return null;
-    const xml = await new Response(res.body).text();
-    // A sitemap index would need recursive fetching — out of scope for a
-    // monitor check; fall back to conditional GETs instead.
-    if (/<sitemapindex[\s>]/i.test(xml)) return null;
-    const entries = parseSitemapXml(xml);
+    const discovery = await discoverSitemapEntries(origin, declared, {
+      maxUrls: MAX_MONITOR_SITEMAP_URLS,
+    });
+    const entries = discovery.entries.map((entry) => ({
+      url: entry.url,
+      lastmod: entry.lastmod ?? null,
+    }));
     return entries.length > 0 ? entries : null;
   } catch {
     return null;
   }
-}
-
-/**
- * Minimal <loc>/<lastmod> extraction. Intentionally local to this consumer:
- * crawler/sitemap.ts belongs to the crawl stream and we must not depend on
- * its internals (see AGENTS stream boundaries).
- */
-export function parseSitemapXml(xml: string): SitemapEntry[] {
-  const entries: SitemapEntry[] = [];
-  for (const block of xml.match(/<url[\s>][\s\S]*?<\/url>/gi) ?? []) {
-    const loc = /<loc>\s*([\s\S]*?)\s*<\/loc>/i.exec(block)?.[1];
-    if (!loc) continue;
-    const lastmod = /<lastmod>\s*([\s\S]*?)\s*<\/lastmod>/i.exec(block)?.[1] ?? null;
-    entries.push({ url: decodeXmlEntities(loc), lastmod });
-  }
-  return entries;
-}
-
-function decodeXmlEntities(s: string): string {
-  return s
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&quot;/g, '"')
-    .replace(/&apos;/g, "'")
-    .replace(/&amp;/g, "&"); // last, so &amp;lt; doesn't double-decode
 }
 
 /** Sort URLs by path depth, shallowest first; stable on ties via string order. */

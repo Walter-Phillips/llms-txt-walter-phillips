@@ -3,7 +3,7 @@
 
 import { normalizeUrl } from "../lib/url";
 
-export const MAX_PAGES = 100;
+export const MAX_PAGES = 1_000;
 export const MAX_DEPTH = 3;
 
 const PATH_BLOCKLIST = [

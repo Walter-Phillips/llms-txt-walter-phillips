@@ -15,7 +15,7 @@ const MODEL = "claude-sonnet-4-6";
 const TEMPERATURE = 0.2;
 const MAX_TOKENS = 8192;
 /** Cap on how many pages we send to the model. */
-const MAX_PAGES = 150;
+const MAX_PAGES = 1_000;
 /** Truncation limits for prompt fields. */
 const MAX_FIELD_CHARS = 160;
 const MAX_SNIPPET_CHARS = 600;

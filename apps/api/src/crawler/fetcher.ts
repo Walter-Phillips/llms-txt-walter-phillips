@@ -9,11 +9,12 @@ export type FetchResult = {
   etag: string | null;
   lastModified: string | null;
   contentType: string | null;
+  contentEncoding: string | null;
 };
 
 export async function politeFetch(
   url: string,
-  opts: { etag?: string; lastModified?: string } = {},
+  opts: { etag?: string; lastModified?: string; maxBodyBytes?: number } = {},
 ): Promise<FetchResult> {
   const headers: Record<string, string> = { "user-agent": UA };
   if (opts.etag) headers["if-none-match"] = opts.etag;
@@ -26,8 +27,9 @@ export async function politeFetch(
   });
 
   const declaredLength = Number.parseInt(res.headers.get("content-length") ?? "", 10);
+  const maxBodyBytes = opts.maxBodyBytes ?? MAX_BODY_BYTES;
   let body = res.body;
-  if (Number.isFinite(declaredLength) && declaredLength > MAX_BODY_BYTES) {
+  if (Number.isFinite(declaredLength) && declaredLength > maxBodyBytes) {
     await res.body?.cancel();
     body = null;
   }
@@ -38,6 +40,7 @@ export async function politeFetch(
     etag: res.headers.get("etag"),
     lastModified: res.headers.get("last-modified"),
     contentType: res.headers.get("content-type"),
+    contentEncoding: res.headers.get("content-encoding"),
   };
 }
 

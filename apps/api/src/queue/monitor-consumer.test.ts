@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { byDepth, parseSitemapXml, resolveCheck } from "./monitor-consumer";
+import { parseSitemapXml } from "../crawler/sitemap";
 import { buildChangeSet } from "../monitor/detect";
+import { byDepth, resolveCheck } from "./monitor-consumer";
+
+function sitemapEntries(xml: string): { url: string; lastmod: string | null }[] {
+  const parsed = parseSitemapXml(xml);
+  if (parsed.kind !== "urlset") return [];
+  return parsed.entries.map((entry) => ({ url: entry.url, lastmod: entry.lastmod ?? null }));
+}
 
 describe("parseSitemapXml", () => {
   it("extracts loc and lastmod pairs", () => {
@@ -14,7 +21,7 @@ describe("parseSitemapXml", () => {
     <loc> https://example.com/docs </loc>
   </url>
 </urlset>`;
-    expect(parseSitemapXml(xml)).toEqual([
+    expect(sitemapEntries(xml)).toEqual([
       { url: "https://example.com/", lastmod: "2026-05-01" },
       { url: "https://example.com/docs", lastmod: null },
     ]);
@@ -22,13 +29,13 @@ describe("parseSitemapXml", () => {
 
   it("decodes xml entities in urls", () => {
     const xml = `<urlset><url><loc>https://example.com/a?x=1&amp;y=2</loc></url></urlset>`;
-    expect(parseSitemapXml(xml)).toEqual([
+    expect(sitemapEntries(xml)).toEqual([
       { url: "https://example.com/a?x=1&y=2", lastmod: null },
     ]);
   });
 
   it("returns empty for non-sitemap content", () => {
-    expect(parseSitemapXml("<html><body>404</body></html>")).toEqual([]);
+    expect(sitemapEntries("<html><body>404</body></html>")).toEqual([]);
   });
 });
 
