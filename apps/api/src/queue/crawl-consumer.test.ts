@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
+import type { Environment } from "../bindings";
 import { aliasSitemapEntries, applyCadencePrior, deriveSignals } from "./crawl-discovery";
+import { enqueuePages } from "./crawl-consumer";
 
 const HOUR = 3600;
 
@@ -105,6 +107,53 @@ describe("aliasSitemapEntries", () => {
       { url: "not a url" },
       { url: "https://www.walterphillips.me/about" },
     ]);
+  });
+});
+
+describe("enqueuePages", () => {
+  it("chunks producer batches to the Workers Queues 100-message limit", async () => {
+    type SentPageBatch = {
+      body: {
+        type: "page";
+        runId: string;
+        siteId: string;
+        url: string;
+        depth: number;
+        followLinks: boolean;
+      };
+      delaySeconds: number;
+    }[];
+    const sendBatch = vi.fn((_: SentPageBatch) => Promise.resolve(undefined));
+    const urls = Array.from({ length: 250 }, (_, i) => ({
+      url: `https://example.com/page-${String(i)}`,
+      depth: 0,
+    }));
+
+    await enqueuePages({
+      env: {
+        CRAWL_QUEUE: { sendBatch } as unknown as Environment["CRAWL_QUEUE"],
+      } as Environment,
+      runId: "run_1",
+      siteId: "site_1",
+      urls,
+      followLinks: false,
+    });
+
+    const sentBatches = sendBatch.mock.calls.map(([batch]) => batch);
+    expect(sendBatch).toHaveBeenCalledTimes(3);
+    expect(sentBatches.map((batch) => batch.length)).toEqual([100, 100, 50]);
+    expect(sentBatches[0]?.[0]).toEqual({
+      body: {
+        type: "page",
+        runId: "run_1",
+        siteId: "site_1",
+        url: "https://example.com/page-0",
+        depth: 0,
+        followLinks: false,
+      },
+      delaySeconds: 0,
+    });
+    expect(sentBatches[1]?.[0]?.delaySeconds).toBe(25);
   });
 });
 

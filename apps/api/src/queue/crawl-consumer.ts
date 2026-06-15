@@ -3,7 +3,7 @@ import { eq } from "drizzle-orm";
 import { crawlRuns } from "@profound-takehome/db";
 import type { CrawlMessage, Environment } from "../bindings";
 import { fetchRobots } from "../crawler/robots";
-import { discoverSitemapEntries } from "../crawler/sitemap";
+import { discoverSitemapEntries, type SitemapEntry } from "../crawler/sitemap";
 import { generate } from "../generator";
 import { logError, logInfo } from "../observability/logger";
 import { captureHandledException } from "../observability/sentry";
@@ -24,6 +24,7 @@ import {
 import { enqueueGeneratedRun, fetchAndPersistPage } from "./crawl-page";
 
 const MIN_SITEMAP_URLS = 3;
+const QUEUE_SEND_BATCH_LIMIT = 100;
 type Database = ReturnType<typeof drizzle>;
 type DiscoverMessage = Extract<CrawlMessage, { type: "discover" }>;
 type PageMessage = Extract<CrawlMessage, { type: "page" }>;
@@ -54,24 +55,36 @@ async function doCall<T>(stub: DurableObjectStub, path: string, body: unknown): 
 
 /**
  * Stagger page fetches to stay polite without a per-domain scheduler.
- * @param env Worker bindings containing the crawl queue.
- * @param runId Crawl run receiving page messages.
- * @param siteId Site whose pages are being enqueued.
- * @param urls Accepted URLs with crawl depth.
+ * @param input Page enqueue context.
+ * @param input.env Worker bindings containing the crawl queue.
+ * @param input.runId Crawl run receiving page messages.
+ * @param input.siteId Site whose pages are being enqueued.
+ * @param input.urls Accepted URLs with crawl depth.
+ * @param input.followLinks Whether page bodies are needed for frontier expansion.
  */
-async function enqueuePages(
-  env: Environment,
-  runId: string,
-  siteId: string,
-  urls: { url: string; depth: number }[],
-): Promise<void> {
-  if (urls.length === 0) return;
-  await env.CRAWL_QUEUE.sendBatch(
-    urls.map(({ url, depth }, i) => ({
-      body: { type: "page" as const, runId, siteId, url, depth },
-      delaySeconds: Math.floor(i / 4),
-    })),
-  );
+export async function enqueuePages(input: {
+  env: Environment;
+  runId: string;
+  siteId: string;
+  urls: { url: string; depth: number }[];
+  followLinks: boolean;
+}): Promise<void> {
+  if (input.urls.length === 0) return;
+  const messages = input.urls.map(({ url, depth }, i) => ({
+    body: {
+      type: "page" as const,
+      runId: input.runId,
+      siteId: input.siteId,
+      url,
+      depth,
+      followLinks: input.followLinks,
+    },
+    delaySeconds: Math.floor(i / 4),
+  }));
+
+  for (let start = 0; start < messages.length; start += QUEUE_SEND_BATCH_LIMIT) {
+    await input.env.CRAWL_QUEUE.sendBatch(messages.slice(start, start + QUEUE_SEND_BATCH_LIMIT));
+  }
 }
 
 async function failRunAfterEnqueueFailure(input: EnqueueFailureInput): Promise<void> {
@@ -146,9 +159,16 @@ async function enqueueSeededPages(input: {
   stub: DurableObjectStub;
   message: DiscoverMessage;
   accepted: AcceptedUrl[];
+  followLinks: boolean;
 }): Promise<void> {
   try {
-    await enqueuePages(input.env, input.message.runId, input.message.siteId, input.accepted);
+    await enqueuePages({
+      env: input.env,
+      runId: input.message.runId,
+      siteId: input.message.siteId,
+      urls: input.accepted,
+      followLinks: input.followLinks,
+    });
   } catch (error) {
     await failRunAfterEnqueueFailure({
       db: input.db,
@@ -191,6 +211,42 @@ function logDiscoveryCompleted(input: {
   });
 }
 
+async function persistDiscoveryState(input: {
+  db: Database;
+  message: DiscoverMessage;
+  discoveryMethod: string;
+  accepted: AcceptedUrl[];
+  now: number;
+  useSitemap: boolean;
+  entries: SitemapEntry[];
+  sitemapIsNews: boolean;
+}): Promise<void> {
+  if (input.useSitemap) {
+    await persistSitemapPages({
+      db: input.db,
+      siteId: input.message.siteId,
+      entries: input.entries,
+      accepted: input.accepted,
+      now: input.now,
+    });
+  }
+
+  await markRunCrawling({
+    db: input.db,
+    message: input.message,
+    discoveryMethod: input.discoveryMethod,
+    accepted: input.accepted,
+    now: input.now,
+  });
+
+  await applyDiscoveryCadence({
+    db: input.db,
+    message: input.message,
+    accepted: input.accepted,
+    isNewsSitemap: input.useSitemap && input.sitemapIsNews,
+  });
+}
+
 async function handleDiscover(env: Environment, message: DiscoverMessage): Promise<void> {
   const db = drizzle(env.DB);
   const now = Math.floor(Date.now() / 1000);
@@ -224,19 +280,16 @@ async function handleDiscover(env: Environment, message: DiscoverMessage): Promi
 
   const seeded = await seedFrontier({ stub, message, origin, useSitemap, entries });
 
-  // Persist sitemap lastmod per page now — it's the cheapest monitoring signal
-  // later, and the page consumer doesn't see sitemap data.
-  if (useSitemap) {
-    await persistSitemapPages({
-      db,
-      siteId: message.siteId,
-      entries,
-      accepted: seeded.accepted,
-      now,
-    });
-  }
-
-  await markRunCrawling({ db, message, discoveryMethod, accepted: seeded.accepted, now });
+  await persistDiscoveryState({
+    db,
+    message,
+    discoveryMethod,
+    accepted: seeded.accepted,
+    now,
+    useSitemap,
+    entries,
+    sitemapIsNews: sitemap.isNews,
+  });
   logDiscoveryCompleted({
     message,
     origin,
@@ -245,21 +298,19 @@ async function handleDiscover(env: Environment, message: DiscoverMessage): Promi
     acceptedCount: seeded.accepted.length,
   });
 
-  // Set the adaptive-cadence prior only on a site's first crawl. Monitor and
-  // manual re-crawls must not clobber an interval the feedback loop has tuned.
-  await applyDiscoveryCadence({
-    db,
-    message,
-    accepted: seeded.accepted,
-    isNewsSitemap: useSitemap && sitemap.isNews,
-  });
-
   if (seeded.accepted.length === 0) {
     await finishEmptyRun(db, stub, message.runId, now);
     return;
   }
 
-  await enqueueSeededPages({ db, env, stub, message, accepted: seeded.accepted });
+  await enqueueSeededPages({
+    db,
+    env,
+    stub,
+    message,
+    accepted: seeded.accepted,
+    followLinks: !useSitemap,
+  });
 }
 
 async function handlePage(env: Environment, message: PageMessage): Promise<void> {
@@ -276,7 +327,13 @@ async function handlePage(env: Environment, message: PageMessage): Promise<void>
   } satisfies CompleteRequest);
 
   try {
-    await enqueuePages(env, message.runId, message.siteId, completion.accepted);
+    await enqueuePages({
+      env,
+      runId: message.runId,
+      siteId: message.siteId,
+      urls: completion.accepted,
+      followLinks: message.followLinks === true,
+    });
   } catch (error) {
     await failRunAfterEnqueueFailure({
       db,

@@ -13,43 +13,47 @@ function SpecimenPanel(): ReactElement {
         <span className="specimen-file-spec">spec v0.1</span>
       </div>
       <pre className="specimen-pre">
-        <span className="tok-h1"># Acme</span>
+        <span className="tok-h1"># llmstxt.gen</span>
         {"\n\n"}
-        <span className="tok-quote">&gt; Acme builds developer tooling. This file lists the</span>
+        <span className="tok-quote">&gt; Generate hosted llms.txt files for your site.</span>
         {"\n"}
-        <span className="tok-quote"> canonical pages of acme.com for language models.</span>
+        <span className="tok-quote">&gt; Keep them current as your site changes.</span>
         {"\n\n"}
         <span className="tok-h2">## Docs</span>
         {"\n"}
         <span className="tok-bullet">- </span>
-        <span className="tok-link">[Quickstart]</span>
-        <span className="tok-url">(/docs/quickstart)</span>
-        <span className="tok-desc">: Ship in 5 min</span>
+        <span className="tok-link">[Product docs]</span>
+        <span className="tok-url">(/docs)</span>
+        <span className="tok-desc">: Guide</span>
         {"\n"}
         <span className="tok-bullet">- </span>
-        <span className="tok-link">[API reference]</span>
-        <span className="tok-url">(/docs/api)</span>
-        <span className="tok-desc">: Endpoints + types</span>
+        <span className="tok-link">[Use]</span>
+        <span className="tok-url">(/docs#use)</span>
+        <span className="tok-desc">: Generate + monitor</span>
         {"\n"}
         <span className="tok-bullet">- </span>
-        <span className="tok-link">[Self-hosting]</span>
-        <span className="tok-url">(/docs/self-hosting)</span>
+        <span className="tok-link">[Pipeline]</span>
+        <span className="tok-url">(/docs#under-the-hood)</span>
+        <span className="tok-desc">: Internals</span>
         {"\n\n"}
         <span className="tok-h2">## Product</span>
         {"\n"}
         <span className="tok-bullet">- </span>
-        <span className="tok-link">[Pricing]</span>
-        <span className="tok-url">(/pricing)</span>
+        <span className="tok-link">[Generate]</span>
+        <span className="tok-url">(/)</span>
+        <span className="tok-desc">: Start a run</span>
         {"\n"}
         <span className="tok-bullet">- </span>
-        <span className="tok-link">[Integrations]</span>
-        <span className="tok-url">(/integrations)</span>
+        <span className="tok-link">[Trust]</span>
+        <span className="tok-url">(/docs#trust)</span>
+        <span className="tok-desc">: Crawl limits</span>
         {"\n\n"}
         <span className="tok-h2">## Optional</span>
         {"\n"}
         <span className="tok-bullet">- </span>
-        <span className="tok-link">[Blog]</span>
-        <span className="tok-url">(/blog)</span>
+        <span className="tok-link">[Spec]</span>
+        <span className="tok-url">(https://llmstxt.org)</span>
+        <span className="tok-desc">: llms.txt</span>
         <span className="caret">▌</span>
       </pre>
     </aside>

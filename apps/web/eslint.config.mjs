@@ -203,6 +203,9 @@ export default tseslint.config(
       "src/app/**/route.ts",
       "src/app/**/template.tsx",
       "src/app/**/default.tsx",
+      "src/app/**/sitemap.ts",
+      "src/app/**/robots.ts",
+      "src/app/**/manifest.ts",
     ],
     rules: {
       "jsdoc/require-jsdoc": "off",

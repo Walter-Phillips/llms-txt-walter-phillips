@@ -1,10 +1,11 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, lt } from "drizzle-orm";
 import type { drizzle } from "drizzle-orm/d1";
 import { nanoid } from "nanoid";
 import { crawlRuns, pages } from "@profound-takehome/db";
 import type { CrawlMessage, Environment } from "../bindings";
 import { isHtml, politeFetch, type FetchResult } from "../crawler/fetcher";
 import { extract } from "../crawler/extract";
+import { MAX_DEPTH } from "../crawler/frontier";
 import { classify } from "../generator/heuristics";
 import { logInfo, logWarn, urlFields } from "../observability/logger";
 
@@ -47,6 +48,20 @@ async function getStoredPage(db: Database, message: PageMessage): Promise<Stored
     .from(pages)
     .where(and(eq(pages.siteId, message.siteId), eq(pages.url, message.url)))
     .get();
+}
+
+function fetchOptionsForPage(
+  message: PageMessage,
+  existing: StoredPage | undefined,
+): {
+  etag?: string;
+  lastModified?: string;
+} {
+  if (message.followLinks === true && message.depth < MAX_DEPTH) return {};
+  return {
+    etag: existing?.etag ?? undefined,
+    lastModified: existing?.lastModified ?? undefined,
+  };
 }
 
 async function markPageError(input: PageWriteInput): Promise<void> {
@@ -160,10 +175,10 @@ export async function fetchAndPersistPage(input: {
   const writeInput = { ...input, existingId: existing?.id };
 
   try {
-    const response = await politeFetch(input.message.url, {
-      etag: existing?.etag ?? undefined,
-      lastModified: existing?.lastModified ?? undefined,
-    });
+    const response = await politeFetch(
+      input.message.url,
+      fetchOptionsForPage(input.message, existing),
+    );
     return await handleFetchResponse(writeInput, response);
   } catch {
     // Fetch/extract failure for one page must not fail the run.
@@ -178,6 +193,26 @@ export async function fetchAndPersistPage(input: {
     });
   }
   return undefined;
+}
+
+async function retirePagesMissedByRun(db: Database, message: PageMessage): Promise<void> {
+  const run = await db
+    .select({ startedAt: crawlRuns.startedAt })
+    .from(crawlRuns)
+    .where(eq(crawlRuns.id, message.runId))
+    .get();
+  if (run?.startedAt === null || run?.startedAt === undefined) return;
+
+  await db
+    .update(pages)
+    .set({ status: "removed" })
+    .where(
+      and(
+        eq(pages.siteId, message.siteId),
+        eq(pages.status, "active"),
+        lt(pages.lastSeenAt, run.startedAt),
+      ),
+    );
 }
 
 /**
@@ -201,6 +236,8 @@ export async function enqueueGeneratedRun(input: {
     capped: boolean;
   };
 }): Promise<void> {
+  await retirePagesMissedByRun(input.db, input.message);
+
   await input.db
     .update(crawlRuns)
     .set({

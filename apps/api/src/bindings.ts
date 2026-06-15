@@ -1,6 +1,14 @@
 export type CrawlMessage =
   | { type: "discover"; runId: string; siteId: string; url: string }
-  | { type: "page"; runId: string; siteId: string; url: string; depth: number }
+  | {
+      type: "page";
+      runId: string;
+      siteId: string;
+      url: string;
+      depth: number;
+      /** True when this page body is needed to expand the link frontier. */
+      followLinks?: boolean;
+    }
   | { type: "generate"; runId: string; siteId: string };
 
 export interface MonitorMessage {

@@ -16,6 +16,10 @@
   Wrangler resources and applying the local D1 migration with
   `pnpm --filter @profound-takehome/api db:migrate:local`. Next.js listens on
   port 3000 and Wrangler listens on port 8787.
+- Wrangler 4.100+ may ask once whether to install Cloudflare skills for
+  detected AI coding agents. Answer `n` unless you explicitly want that global
+  install; after any answer, Wrangler writes a global marker and future
+  `pnpm dev` runs continue normally.
 - The web app defaults `NEXT_PUBLIC_API_URL` to `http://localhost:8787` when
   mock mode is disabled. If the Worker is not running, API-backed UI flows fail
   fast rather than falling back to mock data.
@@ -34,3 +38,7 @@
   protocol-sized cap so large partitioned sitemaps can still seed the bounded
   crawl frontier.
 - Crawl admission and LLM refinement input are capped at 1,000 pages per run.
+- Toscrape coverage is a manual live network probe, not a CI fixture dependency.
+  Run `pnpm test:toscrape:live` when crawler behavior changes to check static
+  Books pages, static Quotes variants, and known JavaScript-rendering gaps
+  against the live site. `make verify` remains deterministic and offline.

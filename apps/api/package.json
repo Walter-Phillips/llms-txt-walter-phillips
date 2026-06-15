@@ -4,13 +4,14 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "wrangler dev",
+    "dev": "wrangler dev --port 8787 --show-interactive-dev-session=false",
     "deploy": "wrangler deploy",
     "build": "tsc --noEmit",
     "lint": "eslint . --max-warnings 0",
     "lint:fix": "eslint . --fix",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run",
+    "test": "vitest run --exclude \"**/*.live.test.ts\"",
+    "test:toscrape:live": "vitest run src/crawler/toscrape.live.test.ts",
     "db:migrate:local": "wrangler d1 migrations apply llms_txt --local",
     "db:migrate:remote": "wrangler d1 migrations apply llms_txt --remote",
     "cf-typegen": "wrangler types"
@@ -28,7 +29,7 @@
     "zod": "^3.24.0"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^4.20250101.0",
+    "@cloudflare/workers-types": "^4.20260615.1",
     "@eslint/js": "^9",
     "@profound-takehome/config": "workspace:*",
     "@types/node": "^22.0.0",
@@ -38,6 +39,6 @@
     "typescript": "^5.7.0",
     "typescript-eslint": "^8",
     "vitest": "^2.1.0",
-    "wrangler": "^3.95.0"
+    "wrangler": "^4.100.0"
   }
 }

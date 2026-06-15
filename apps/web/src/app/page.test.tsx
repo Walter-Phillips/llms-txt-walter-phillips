@@ -35,6 +35,9 @@ it("renders the hero, explainer, and example chips", () => {
   render(<Home />);
   expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(/make your website legible/i);
   expect(screen.getByText(/the file LLMs read to understand your site/i)).toBeInTheDocument();
+  expect(screen.getByText("[Product docs]")).toBeInTheDocument();
+  expect(screen.getByText("(/docs#under-the-hood)")).toBeInTheDocument();
+  expect(screen.getByText("[Spec]")).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "vercel.com" })).toBeInTheDocument();
   expect(screen.getByLabelText("Website URL")).toBeInTheDocument();
 });

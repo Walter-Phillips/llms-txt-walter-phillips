@@ -14,7 +14,7 @@ Top-level map for the llms.txt generator.
 ## Boundaries
 
 - **UI never talks to D1 or R2 directly.** All persistence flows through the Worker API. The hosted `/sites/:domain/llms.txt` route is the only direct R2-to-public path, and it goes through the Worker.
-- **Queue consumers are the only writers** to `pages` and `file_versions`. The HTTP layer only writes `sites` + `crawl_runs` (registration + run kickoff).
+- **Queue consumers are the only writers** to `pages` and `file_versions`. The HTTP layer only writes `sites` + `crawl_runs` (registration + run kickoff). When a crawl drains successfully, pages not observed in that run are retired before generation so the active inventory matches the version being published.
 - **SiteCoordinator DO owns runtime crawl state** (frontier, progress). D1 owns durable history. Don't duplicate.
 - **LLM never sees URLs it didn't receive in the inventory.** Generator/llm.ts maps refined output back to known URLs only.
 

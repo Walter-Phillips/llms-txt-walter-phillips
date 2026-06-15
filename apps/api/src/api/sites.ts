@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { z } from "zod";
 import { nanoid } from "nanoid";
 import { drizzle } from "drizzle-orm/d1";
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { sites, crawlRuns, pages, fileVersions } from "@profound-takehome/db";
 import type { Environment } from "../bindings";
 import { normalizeOrigin } from "../lib/url";
@@ -140,7 +140,7 @@ sitesRouter.get("/:id/pages", async (c) => {
       status: pages.status,
     })
     .from(pages)
-    .where(eq(pages.siteId, site.id))
+    .where(and(eq(pages.siteId, site.id), eq(pages.status, "active")))
     .orderBy(pages.url);
   return c.json({ pages: rows });
 });

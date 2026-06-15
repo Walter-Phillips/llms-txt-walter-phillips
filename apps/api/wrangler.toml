@@ -15,7 +15,7 @@ enabled = true
 [[d1_databases]]
 binding = "DB"
 database_name = "llms_txt"
-database_id = "REPLACE_WITH_D1_ID"
+database_id = "e2c9f29d-e313-4a00-acf4-ec2cc0165095"
 migrations_dir = "../../packages/db/migrations"
 
 [[r2_buckets]]
@@ -24,7 +24,7 @@ bucket_name = "llms-txt-files"
 
 [[kv_namespaces]]
 binding = "RATE_LIMIT"
-id = "REPLACE_WITH_KV_ID"
+id = "d723182e19684d55b1f2cfc10f8ad30b"
 
 [[queues.producers]]
 binding = "CRAWL_QUEUE"
@@ -66,7 +66,7 @@ new_sqlite_classes = ["SiteCoordinator"]
 crons = ["*/15 * * * *"]
 
 [vars]
-APP_ORIGIN = "https://llms-txt.example.com"
+APP_ORIGIN = "https://llms-txt-web.vercel.app"
 # SENTRY_TRACES_SAMPLE_RATE = "0"
 # AXIOM_DATASET = "llms-txt-prod"
 # AXIOM_EDGE_URL = "https://your-region.edge.axiom.co"

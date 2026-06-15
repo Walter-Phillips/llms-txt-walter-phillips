@@ -10,6 +10,7 @@
     "lint": "turbo lint",
     "typecheck": "turbo typecheck",
     "test": "turbo test",
+    "test:toscrape:live": "pnpm --filter @profound-takehome/api test:toscrape:live",
     "check-docs": "python3 scripts/check_harness.py",
     "check-architecture": "python3 scripts/check_harness.py",
     "verify": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm check-docs"
