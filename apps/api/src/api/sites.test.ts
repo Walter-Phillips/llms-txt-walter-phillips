@@ -98,8 +98,9 @@ describe("sitesRouter", () => {
       values: {
         id: body.siteId,
         domain: "https://example.com",
-        monitoring: 0,
+        monitoring: 1,
         checkIntervalS: 86400,
+        nextCheckAt: 1781524800,
         changeStreak: 0,
         createdAt: 1781438400,
       },
@@ -148,6 +149,9 @@ describe("sitesRouter", () => {
     const body = await readJson<CreateSiteResponse>(response);
     expect(body.siteId).toBe(existing.id);
     expect(db.inserts).toHaveLength(1);
+    expect(db.updates).toEqual([
+      { table: "sites", values: { monitoring: 1, nextCheckAt: 1781524800 } },
+    ]);
     expect(db.inserts[0]).toMatchObject({
       table: "crawlRuns",
       values: {
@@ -164,6 +168,33 @@ describe("sitesRouter", () => {
       siteId: existing.id,
       url: "https://example.com",
     });
+  });
+
+  it("keeps active monitoring scheduled when reusing an existing monitored site", async () => {
+    vi.setSystemTime(new Date("2026-06-14T12:00:00Z"));
+    const existing = {
+      id: "site_existing",
+      domain: "https://example.com",
+      monitoring: 1,
+      checkIntervalS: 86400,
+      nextCheckAt: 1781500000,
+      changeStreak: 0,
+      createdAt: 1,
+    };
+    const db = new FakeDatabase();
+    db.queueSelect(sites, existing);
+    const send = vi.fn(() => Promise.resolve(undefined));
+    const env = createTestEnvironment(db);
+    env.CRAWL_QUEUE = { send } as unknown as Environment["CRAWL_QUEUE"];
+
+    const response = await appForSites().request(
+      "/api/sites",
+      jsonPost("https://example.com/pricing"),
+      env,
+    );
+
+    expect(response.status).toBe(200);
+    expect(db.updates).toEqual([]);
   });
 
   it("enables monitoring from the site's current interval", async () => {

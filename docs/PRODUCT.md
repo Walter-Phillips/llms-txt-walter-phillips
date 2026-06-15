@@ -7,12 +7,12 @@ Generate a spec-compliant [llms.txt](https://llmstxt.org) for any public website
 ## Users
 
 - **Primary — observer.** Anyone who wants an llms.txt for a site they don't own, immediately and without sign-up. Paste a URL, get a downloadable file plus a stable hosted URL.
-- **Secondary — site owner.** Wants the file to track their own site over time. Turns on monitoring, reverse-proxies the hosted URL from their domain (or pulls the file via the API), trusts it to stay current.
+- **Secondary — site owner.** Wants the file to track their own site over time. Monitoring starts on by default, and they can reverse-proxy the hosted URL from their domain (or pull the file via the API) and trust it to stay current.
 
 ## Core Workflows
 
 1. **Generate** — paste URL → see live progress (discovering → crawling N/M → generating) → land on a result page with the rendered llms.txt, a copy/download path, a stable hosted URL, and a page-inventory table showing what was crawled and how it was classified.
-2. **Watch** — toggle monitoring on a result. The system picks an adaptive cadence (priors from sitemap shape + RSS presence, feedback loop on whether changes are actually found) and regenerates when site structure or page metadata changes.
+2. **Watch** — monitoring is on for newly generated sites by default and can be paused on a result. The system picks an adaptive cadence (priors from sitemap shape + RSS presence, feedback loop on whether changes are actually found) and regenerates when site structure or page metadata changes.
 3. **History** — view version timeline with change summaries ("2 pages added, 1 modified"); diff any two versions inline.
 
 ## Non-Goals

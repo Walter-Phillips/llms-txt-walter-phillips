@@ -157,21 +157,26 @@ describe("enqueuePages", () => {
   });
 });
 
+interface CadenceWrite {
+  checkIntervalS: number;
+  nextCheckAt: number;
+}
+
 /**
- * Records the interval an `update(sites).set(...)` call would persist.
- * @returns Fake database and the last interval written through it.
+ * Records the cadence values an `update(sites).set(...)` call would persist.
+ * @returns Fake database and the last cadence write.
  */
 function fakeDatabase(): {
   db: {
-    update: () => { set: (vals: { checkIntervalS: number }) => { where: () => Promise<void> } };
+    update: () => { set: (vals: CadenceWrite) => { where: () => Promise<void> } };
   };
-  written: () => number | undefined;
+  written: () => CadenceWrite | undefined;
 } {
-  let written: number | undefined;
+  let written: CadenceWrite | undefined;
   const db = {
     update: () => ({
-      set: (vals: { checkIntervalS: number }) => {
-        written = vals.checkIntervalS;
+      set: (vals: CadenceWrite) => {
+        written = vals;
         return { where: () => Promise.resolve() };
       },
     }),
@@ -180,23 +185,34 @@ function fakeDatabase(): {
 }
 
 describe("applyCadencePrior", () => {
-  it("sets checkIntervalS from signals on the initial crawl", async () => {
+  it("sets checkIntervalS and schedules the first monitor check on the initial crawl", async () => {
     const { db, written } = fakeDatabase();
-    await applyCadencePrior(db as never, "site1", "initial", {
-      urls: ["https://example.com/article"],
-      pageCount: 3,
-      isNewsSitemap: true, // news sitemap → 6h prior
+    await applyCadencePrior({
+      db: db as never,
+      siteId: "site1",
+      trigger: "initial",
+      signals: {
+        urls: ["https://example.com/article"],
+        pageCount: 3,
+        isNewsSitemap: true, // news sitemap -> 6h prior
+      },
+      now: 1000,
     });
-    expect(written()).toBe(6 * HOUR);
+    expect(written()).toEqual({ checkIntervalS: 6 * HOUR, nextCheckAt: 1000 + 6 * HOUR });
   });
 
   it("does not overwrite the interval on a monitor re-crawl", async () => {
     const { db, written } = fakeDatabase();
     const spy = vi.spyOn(db, "update");
-    await applyCadencePrior(db as never, "site1", "monitor", {
-      urls: ["https://example.com/article"],
-      pageCount: 3,
-      isNewsSitemap: true,
+    await applyCadencePrior({
+      db: db as never,
+      siteId: "site1",
+      trigger: "monitor",
+      signals: {
+        urls: ["https://example.com/article"],
+        pageCount: 3,
+        isNewsSitemap: true,
+      },
     });
     expect(written()).toBeUndefined();
     expect(spy).not.toHaveBeenCalled();
@@ -204,10 +220,15 @@ describe("applyCadencePrior", () => {
 
   it("does not overwrite the interval on a manual re-crawl", async () => {
     const { db, written } = fakeDatabase();
-    await applyCadencePrior(db as never, "site1", "manual", {
-      urls: [],
-      pageCount: 1,
-      isNewsSitemap: false,
+    await applyCadencePrior({
+      db: db as never,
+      siteId: "site1",
+      trigger: "manual",
+      signals: {
+        urls: [],
+        pageCount: 1,
+        isNewsSitemap: false,
+      },
     });
     expect(written()).toBeUndefined();
   });

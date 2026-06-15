@@ -36,22 +36,29 @@ export function deriveSignals(input: {
 /**
  * Persist the first-check interval prior — but only on the site's initial
  * crawl. Re-crawls leave the stored interval alone so adaptive tuning survives.
- * @param db Database client with update support.
- * @param siteId Site whose cadence may be initialized.
- * @param trigger Run trigger that decides whether this is the first crawl.
- * @param signals Discovery signals used to choose the interval.
+ * @param input Cadence prior context.
+ * @param input.db Database client with update support.
+ * @param input.siteId Site whose cadence may be initialized.
+ * @param input.trigger Run trigger that decides whether this is the first crawl.
+ * @param input.signals Discovery signals used to choose the interval.
+ * @param input.now Optional current epoch second used by tests.
  */
-export async function applyCadencePrior(
-  db: Pick<ReturnType<typeof drizzle>, "update">,
-  siteId: string,
-  trigger: string | undefined,
-  signals: Parameters<typeof deriveSignals>[0],
-): Promise<void> {
-  if (trigger !== "initial") return;
-  await db
+export async function applyCadencePrior(input: {
+  db: Pick<ReturnType<typeof drizzle>, "update">;
+  siteId: string;
+  trigger: string | undefined;
+  signals: Parameters<typeof deriveSignals>[0];
+  now?: number;
+}): Promise<void> {
+  if (input.trigger !== "initial") return;
+  const interval = initialInterval(deriveSignals(input.signals));
+  await input.db
     .update(sites)
-    .set({ checkIntervalS: initialInterval(deriveSignals(signals)) })
-    .where(eq(sites.id, siteId));
+    .set({
+      checkIntervalS: interval,
+      nextCheckAt: (input.now ?? Math.floor(Date.now() / 1000)) + interval,
+    })
+    .where(eq(sites.id, input.siteId));
 }
 
 /**

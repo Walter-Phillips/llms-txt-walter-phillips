@@ -30,11 +30,20 @@ sitesRouter.post("/", async (c) => {
     await db.insert(sites).values({
       id: siteId,
       domain: origin,
-      monitoring: 0,
+      monitoring: 1,
       checkIntervalS: 86400,
+      nextCheckAt: now + 86400,
       changeStreak: 0,
       createdAt: now,
     });
+  } else if (existing.monitoring !== 1) {
+    await db
+      .update(sites)
+      .set({
+        monitoring: 1,
+        nextCheckAt: now + existing.checkIntervalS,
+      })
+      .where(eq(sites.id, existing.id));
   }
 
   const runId = nanoid(12);

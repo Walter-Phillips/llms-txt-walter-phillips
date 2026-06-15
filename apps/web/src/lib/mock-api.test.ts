@@ -77,12 +77,28 @@ describe("mock API simulation", () => {
 
   it("toggles monitoring and schedules the next check", async () => {
     const { siteId } = await mockClient.createSite("https://acme.dev");
-    const on = await mockClient.setMonitoring(siteId, true);
-    expect(on.site.monitoring).toBe(1);
-    expect(on.site.nextCheckAt).toBe(Date.now() + on.site.checkIntervalS * 1000);
+    const initial = await mockClient.getSite(siteId);
+    expect(initial.site.monitoring).toBe(1);
+    expect(initial.site.nextCheckAt).toBe(Date.now() + initial.site.checkIntervalS * 1000);
+
     const off = await mockClient.setMonitoring(siteId, false);
     expect(off.site.monitoring).toBe(0);
     expect(off.site.nextCheckAt).toBeNull();
+
+    const on = await mockClient.setMonitoring(siteId, true);
+    expect(on.site.monitoring).toBe(1);
+    expect(on.site.nextCheckAt).toBe(Date.now() + on.site.checkIntervalS * 1000);
+  });
+
+  it("turns monitoring back on when creating a crawl for an existing paused site", async () => {
+    const { siteId } = await mockClient.createSite("https://acme.dev");
+    await mockClient.setMonitoring(siteId, false);
+
+    await mockClient.createSite("https://acme.dev/docs");
+
+    const site = await mockClient.getSite(siteId);
+    expect(site.site.monitoring).toBe(1);
+    expect(site.site.nextCheckAt).toBe(Date.now() + site.site.checkIntervalS * 1000);
   });
 
   it("rejects unparseable URLs with a 400", async () => {

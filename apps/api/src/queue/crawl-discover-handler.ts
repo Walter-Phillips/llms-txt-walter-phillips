@@ -139,22 +139,30 @@ export async function markRunCrawling(input: {
  * @param input.message Discover message.
  * @param input.accepted Accepted frontier URLs.
  * @param input.isNewsSitemap Whether the selected sitemap was a news sitemap.
+ * @param input.now Current epoch second.
  */
 export async function applyDiscoveryCadence(input: {
   db: Database;
   message: DiscoverMessage;
   accepted: AcceptedUrl[];
   isNewsSitemap: boolean;
+  now: number;
 }): Promise<void> {
   const run = await input.db
     .select({ trigger: crawlRuns.trigger })
     .from(crawlRuns)
     .where(eq(crawlRuns.id, input.message.runId))
     .get();
-  await applyCadencePrior(input.db, input.message.siteId, run?.trigger, {
-    urls: input.accepted.map((page) => page.url),
-    pageCount: input.accepted.length,
-    isNewsSitemap: input.isNewsSitemap,
+  await applyCadencePrior({
+    db: input.db,
+    siteId: input.message.siteId,
+    trigger: run?.trigger,
+    signals: {
+      urls: input.accepted.map((page) => page.url),
+      pageCount: input.accepted.length,
+      isNewsSitemap: input.isNewsSitemap,
+    },
+    now: input.now,
   });
 }
 

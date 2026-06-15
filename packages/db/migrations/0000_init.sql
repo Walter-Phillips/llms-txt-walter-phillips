@@ -5,7 +5,7 @@ CREATE TABLE sites (
   id                TEXT PRIMARY KEY,
   domain            TEXT NOT NULL,
   display_name      TEXT,
-  monitoring        INTEGER NOT NULL DEFAULT 0,
+  monitoring        INTEGER NOT NULL DEFAULT 1,
   check_interval_s  INTEGER NOT NULL DEFAULT 86400,
   next_check_at     INTEGER,
   change_streak     INTEGER NOT NULL DEFAULT 0,

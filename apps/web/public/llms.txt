@@ -3,14 +3,14 @@
 > Generate a spec-compliant llms.txt for any public website by crawling and
 > structuring its content, then keep that file in sync as the site evolves.
 > Observer-first: paste a URL and get a downloadable file plus a stable hosted
-> URL, no sign-up required. Site owners can turn on monitoring so the file
+> URL, no sign-up required. Monitoring starts on by default so the file
 > tracks their site over time.
 
 ## What it does
 
 - [llms.txt spec](https://llmstxt.org): The open standard this tool produces — a plain-text map of a site for language models.
 - [Generate](/): Paste a URL, watch live crawl progress, land on a result page with the rendered llms.txt, a copy/download path, and a page-inventory table.
-- [Watch](/): Toggle monitoring on a result; the system picks an adaptive cadence and regenerates when site structure or page metadata changes.
+- [Watch](/): Pause or resume monitoring on a result; the system picks an adaptive cadence and regenerates when site structure or page metadata changes.
 - [History](/): View a version timeline with change summaries and diff any two versions inline.
 
 ## How it works

@@ -70,12 +70,6 @@ function titleCase(origin: string): string {
   return name.charAt(0).toUpperCase() + name.slice(1);
 }
 
-/**
- * Builds deterministic llms.txt contents for the simulated site version.
- * @param origin Site origin used for generated URLs.
- * @param version Version number to render.
- * @returns Mock llms.txt file contents.
- */
 function makeLlmsTxt(origin: string, version: number): string {
   const host = hostnameFromOrigin(origin);
   const name = titleCase(origin);
@@ -210,8 +204,6 @@ function ensureSite(origin: string): MockSite {
 
   const id = `site_${slugify(origin)}`;
   const now = Date.now();
-  // Seed two backdated versions so history + diffs are demoable on the very
-  // first run (mock-only behavior; the real API starts at version 1).
   const seeded: FileVersion[] = [1, 2].map((v) => ({
     id: `ver_${slugify(origin)}_${String(v)}`,
     siteId: id,
@@ -226,9 +218,9 @@ function ensureSite(origin: string): MockSite {
       id,
       domain: origin,
       displayName: titleCase(origin),
-      monitoring: 0,
+      monitoring: 1,
       checkIntervalS: 21600,
-      nextCheckAt: null,
+      nextCheckAt: now + 21600 * 1000,
       changeStreak: 0,
       createdAt: now - 14 * DAY_MS,
     },
@@ -373,15 +365,15 @@ function parseOrigin(url: string): string {
 function createSite(url: string): CreateSiteResponse {
   const origin = parseOrigin(url);
   const record = ensureSite(origin);
+  if (record.site.monitoring !== 1) setMonitoring(record.site.id, true);
   runCounter += 1;
   const runId = `run_${slugify(origin)}_${String(runCounter)}`;
-  const latest = latestVersion(record);
   runs.set(runId, {
     runId,
     siteId: record.site.id,
     startedAt: Date.now(),
     shouldFail: hostnameFromOrigin(origin).includes("error"),
-    publishesVersion: (latest?.version ?? 0) + 1,
+    publishesVersion: (latestVersion(record)?.version ?? 0) + 1,
   });
   return { siteId: record.site.id, runId };
 }

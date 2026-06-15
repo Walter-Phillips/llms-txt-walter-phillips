@@ -6,7 +6,7 @@ export const sites = sqliteTable(
     id: text("id").primaryKey(),
     domain: text("domain").notNull(),
     displayName: text("display_name"),
-    monitoring: integer("monitoring").notNull().default(0),
+    monitoring: integer("monitoring").notNull().default(1),
     checkIntervalS: integer("check_interval_s").notNull().default(86400),
     nextCheckAt: integer("next_check_at"),
     changeStreak: integer("change_streak").notNull().default(0),
