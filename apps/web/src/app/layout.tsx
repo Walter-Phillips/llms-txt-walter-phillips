@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import { AppHeader } from "@/components/app-header";
 import { SITE_DESCRIPTION, SITE_NAME, SITE_URL } from "@/lib/site";
 import "./globals.css";
+import { Analytics } from "@vercel/analytics/next";
 
 const sans = Geist({
   subsets: ["latin"],
@@ -108,6 +109,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         <div className="grid-bg" aria-hidden="true" />
         <AppHeader />
         <main className="appmain">{children}</main>
+        import {Analytics} from "@vercel/analytics/next"
       </body>
     </html>
   );
