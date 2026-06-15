@@ -1,6 +1,6 @@
 name = "llms-txt-api"
 main = "src/index.ts"
-compatibility_date = "2025-01-15"
+compatibility_date = "2026-03-24"
 compatibility_flags = ["nodejs_compat"]
 
 # Observability
@@ -25,6 +25,10 @@ bucket_name = "llms-txt-files"
 [[kv_namespaces]]
 binding = "RATE_LIMIT"
 id = "d723182e19684d55b1f2cfc10f8ad30b"
+
+[browser]
+binding = "BROWSER"
+remote = true
 
 [[queues.producers]]
 binding = "CRAWL_QUEUE"

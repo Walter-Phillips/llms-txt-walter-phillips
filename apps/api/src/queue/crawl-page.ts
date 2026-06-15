@@ -4,14 +4,26 @@ import { nanoid } from "nanoid";
 import { crawlRuns, pages } from "@profound-takehome/db";
 import type { CrawlMessage, Environment } from "../bindings";
 import { isHtml, politeFetch, type FetchResult } from "../crawler/fetcher";
-import { extract } from "../crawler/extract";
 import { MAX_DEPTH } from "../crawler/frontier";
 import { classify } from "../generator/heuristics";
-import { cachedLinks, fetchedFreshness, unchangedFreshness, type StoredPage } from "./page-cache";
+import {
+  cachedLinks,
+  fetchedFreshness,
+  unchangedFreshness,
+  type PageFreshness,
+  type StoredPage,
+} from "./page-cache";
+import {
+  extractBestPage,
+  type ExtractedPageResult,
+  type RenderFallback,
+} from "./page-render-fallback";
 import { logInfo, logWarn, urlFields } from "../observability/logger";
 
 type Database = ReturnType<typeof drizzle>;
 type PageMessage = Extract<CrawlMessage, { type: "page" }>;
+type PageInsert = typeof pages.$inferInsert;
+type PageUpdate = Partial<Omit<PageInsert, "id" | "siteId" | "url">>;
 
 interface PageWriteInput {
   db: Database;
@@ -105,55 +117,71 @@ async function persistHtmlPage(
     body: ReadableStream<Uint8Array>;
     existing: StoredPage | undefined;
     response: FetchResult;
+    renderFallback?: RenderFallback;
   },
-): Promise<string[]> {
-  const page = await extract(input.body);
+): Promise<ExtractedPageResult> {
+  const result = await extractBestPage({
+    body: input.body,
+    message: input.message,
+    renderFallback: input.renderFallback,
+  });
+  const { page } = result;
   const path = new URL(input.message.url).pathname;
   const { section } = classify(path);
   const freshness = fetchedFreshness(input.existing, page.contentHash, input.now);
+  const values = activePageValues(input, result, section, freshness);
   await input.db
     .insert(pages)
-    .values({
-      id: input.existingId ?? nanoid(12),
-      siteId: input.message.siteId,
-      url: input.message.url,
-      title: page.title,
-      description: page.description,
-      h1: page.h1,
-      snippet: page.snippet,
-      sectionHint: section,
-      contentHash: page.contentHash,
-      etag: input.response.etag,
-      lastModified: input.response.lastModified,
-      outLinksJson: JSON.stringify(page.links),
-      status: "active",
-      lastSeenAt: input.now,
-      ...freshness,
-    })
+    .values(values)
     .onConflictDoUpdate({
       target: [pages.siteId, pages.url],
-      set: {
-        title: page.title,
-        description: page.description,
-        h1: page.h1,
-        snippet: page.snippet,
-        sectionHint: section,
-        contentHash: page.contentHash,
-        etag: input.response.etag,
-        lastModified: input.response.lastModified,
-        outLinksJson: JSON.stringify(page.links),
-        status: "active",
-        lastSeenAt: input.now,
-        ...freshness,
-      },
+      set: activePageUpdateValues(input, result, section, freshness),
     });
-  return page.links;
+  return result;
+}
+
+function activePageValues(
+  input: PageWriteInput & { response: FetchResult },
+  result: ExtractedPageResult,
+  section: string,
+  freshness: Required<PageFreshness>,
+): PageInsert {
+  return {
+    id: input.existingId ?? nanoid(12),
+    siteId: input.message.siteId,
+    url: input.message.url,
+    ...activePageUpdateValues(input, result, section, freshness),
+  };
+}
+
+function activePageUpdateValues(
+  input: PageWriteInput & { response: FetchResult },
+  result: ExtractedPageResult,
+  section: string,
+  freshness: Required<PageFreshness>,
+): PageUpdate {
+  const { page } = result;
+  return {
+    title: page.title,
+    description: page.description,
+    h1: page.h1,
+    snippet: page.snippet,
+    sectionHint: section,
+    contentHash: page.contentHash,
+    etag: input.response.etag,
+    lastModified: input.response.lastModified,
+    outLinksJson: JSON.stringify(page.links),
+    status: "active",
+    lastSeenAt: input.now,
+    ...freshness,
+  };
 }
 
 async function handleFetchResponse(
   writeInput: PageWriteInput,
   existing: StoredPage | undefined,
   response: FetchResult,
+  renderFallback?: RenderFallback,
 ): Promise<string[] | undefined> {
   if (response.status === 304) {
     const links = cachedLinks(existing);
@@ -164,13 +192,22 @@ async function handleFetchResponse(
     });
     return links ?? undefined;
   } else if (response.status === 200 && response.body && isHtml(response.contentType)) {
-    const links = await persistHtmlPage({ ...writeInput, body: response.body, existing, response });
+    const result = await persistHtmlPage({
+      ...writeInput,
+      body: response.body,
+      existing,
+      response,
+      renderFallback,
+    });
     logPageOutcome(writeInput.message, "active", {
       status: response.status,
-      linkCount: links.length,
+      linkCount: result.page.links.length,
+      crawlableLinkCount: result.quality.crawlableLinkCount,
+      extractionSource: result.source,
+      browserMsUsed: result.browserMsUsed,
       cacheOutcome: existing ? "revalidated_200" : "miss",
     });
-    return links;
+    return result.page.links;
   } else {
     await markPageError(writeInput);
     logWarn("crawl_page_fetch_unusable", {
@@ -193,12 +230,14 @@ async function handleFetchResponse(
  * @param input.db Database client.
  * @param input.message Page crawl message.
  * @param input.now Current epoch second.
+ * @param input.renderFallback Optional Browser Run fallback hooks.
  * @returns Discovered links when an HTML page was parsed.
  */
 export async function fetchAndPersistPage(input: {
   db: Database;
   message: PageMessage;
   now: number;
+  renderFallback?: RenderFallback;
 }): Promise<string[] | undefined> {
   const existing = await getStoredPage(input.db, input.message);
   const writeInput = { ...input, existingId: existing?.id };
@@ -208,7 +247,7 @@ export async function fetchAndPersistPage(input: {
       input.message.url,
       fetchOptionsForPage(input.message, existing),
     );
-    return await handleFetchResponse(writeInput, existing, response);
+    return await handleFetchResponse(writeInput, existing, response, input.renderFallback);
   } catch {
     // Fetch/extract failure for one page must not fail the run.
     await markPageError(writeInput);

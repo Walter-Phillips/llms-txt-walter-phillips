@@ -157,6 +157,7 @@ async function persistDiscoveryState(input: {
     message: input.message,
     accepted: input.accepted,
     isNewsSitemap: input.useSitemap && input.sitemapIsNews,
+    now: input.now,
   });
 }
 

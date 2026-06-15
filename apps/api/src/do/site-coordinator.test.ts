@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { MAX_DEPTH, MAX_PAGES } from "../crawler/frontier";
+import { MAX_RENDERED_PAGES_PER_RUN } from "../crawler/render-budget";
 import { createTestEnv as createTestEnvironment, FakeDb as FakeDatabase } from "../test-helpers";
 
 vi.mock("cloudflare:workers", () => ({
@@ -255,6 +256,67 @@ describe("SiteCoordinator", () => {
     });
 
     expect(duplicate.body.pagesCrawled).toBe(1);
+  });
+
+  it("claims browser render budget for in-flight pages only", async () => {
+    const co = coordinator();
+    await claim(co, "run-a");
+    await post(co, "/seed", {
+      runId: "run-a",
+      urls: ["https://example.com/a"],
+      baseUrl: "https://example.com/",
+      depth: 0,
+    });
+
+    const foreign = await post<{ accepted: boolean }>(co, "/claim-render", {
+      runId: "run-b",
+      url: "https://example.com/a",
+    });
+    const accepted = await post<{ accepted: boolean; renderedPages: number }>(co, "/claim-render", {
+      runId: "run-a",
+      url: "https://example.com/a",
+    });
+
+    expect(foreign.body.accepted).toBe(false);
+    expect(accepted.body).toMatchObject({ accepted: true, renderedPages: 1 });
+    expect(await status(co)).toMatchObject({ renderedPages: 1 });
+  });
+
+  it("enforces the browser render budget per run", async () => {
+    const co = coordinator();
+    await claim(co, "run-a");
+    const urls = Array.from(
+      { length: MAX_RENDERED_PAGES_PER_RUN + 1 },
+      (_, i) => `https://example.com/p${String(i)}`,
+    );
+    await post(co, "/seed", {
+      runId: "run-a",
+      urls,
+      baseUrl: "https://example.com/",
+      depth: 0,
+    });
+
+    for (const url of urls.slice(0, MAX_RENDERED_PAGES_PER_RUN)) {
+      const result = await post<{ accepted: boolean }>(co, "/claim-render", {
+        runId: "run-a",
+        url,
+      });
+      expect(result.body.accepted).toBe(true);
+    }
+
+    const overBudget = await post<{ accepted: boolean; renderedPages: number }>(
+      co,
+      "/claim-render",
+      {
+        runId: "run-a",
+        url: urls[MAX_RENDERED_PAGES_PER_RUN],
+      },
+    );
+
+    expect(overBudget.body).toMatchObject({
+      accepted: false,
+      renderedPages: MAX_RENDERED_PAGES_PER_RUN,
+    });
   });
 
   it("keeps the real count when one of several URLs is completed twice", async () => {

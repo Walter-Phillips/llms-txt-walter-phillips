@@ -1,6 +1,11 @@
 import { drizzle } from "drizzle-orm/d1";
 import type { CrawlMessage, Environment } from "../bindings";
-import type { CompleteRequest, CompleteResponse } from "../do/site-coordinator";
+import type {
+  ClaimRenderRequest,
+  ClaimRenderResponse,
+  CompleteRequest,
+  CompleteResponse,
+} from "../do/site-coordinator";
 import { logError } from "../observability/logger";
 import { captureHandledException } from "../observability/sentry";
 import { handleDiscover } from "./crawl-discover-consumer";
@@ -21,7 +26,21 @@ async function handlePage(env: Environment, message: PageMessage): Promise<void>
   const db = drizzle(env.DB);
   const now = Math.floor(Date.now() / 1000);
   const stub = coordinator(env, message.siteId);
-  const links = await fetchAndPersistPage({ db, message, now });
+  const links = await fetchAndPersistPage({
+    db,
+    message,
+    now,
+    renderFallback: {
+      browser: env.BROWSER,
+      claimRender: async () => {
+        const result = await doCall<ClaimRenderResponse>(stub, "/claim-render", {
+          runId: message.runId,
+          url: message.url,
+        } satisfies ClaimRenderRequest);
+        return result.accepted;
+      },
+    },
+  });
 
   const completion = await doCall<CompleteResponse>(stub, "/complete", {
     runId: message.runId,

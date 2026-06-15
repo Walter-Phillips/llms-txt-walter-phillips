@@ -15,7 +15,7 @@
 
 ## How it works
 
-- Static fetch covers most sites; a budget-capped headless-browser fallback handles SPAs.
+- Static fetch covers most sites; a budget-capped Cloudflare Browser Run fallback handles thin static and SPA pages.
 - A deterministic generator is the floor; an LLM refinement pass writes a factual summary grounded only in crawled content — it never invents URLs or sections.
 - Crawls are bounded by design: default cap of 1,000 pages and depth 3. llms.txt is curated metadata, not an exhaustive content dump.
 

@@ -1,6 +1,7 @@
 import { DurableObject } from "cloudflare:workers";
 import type { Environment } from "../bindings";
 import { acceptUrls, MAX_DEPTH, MAX_PAGES } from "../crawler/frontier";
+import { MAX_RENDERED_PAGES_PER_RUN } from "../crawler/render-budget";
 
 type Phase = "idle" | "discovering" | "crawling" | "generating" | "done" | "error";
 
@@ -14,6 +15,7 @@ interface State {
   followLinks: boolean;
   pagesFound: number;
   pagesCrawled: number;
+  renderedPages: number;
   inFlight: string[];
   seen: string[];
   depths: Record<string, number>;
@@ -29,6 +31,7 @@ const IDLE_STATE: State = {
   followLinks: false,
   pagesFound: 0,
   pagesCrawled: 0,
+  renderedPages: 0,
   inFlight: [],
   seen: [],
   depths: {},
@@ -57,6 +60,15 @@ export interface CompleteRequest {
   links?: string[];
   depth: number;
 }
+export interface ClaimRenderRequest {
+  runId: string;
+  url: string;
+}
+export interface ClaimRenderResponse {
+  accepted: boolean;
+  renderedPages: number;
+  maxRenderedPages: number;
+}
 export type CompleteResponse = SeedResponse & {
   drained: boolean;
   pagesFound: number;
@@ -77,7 +89,8 @@ export class SiteCoordinator extends DurableObject<Environment> {
 
   private async load(): Promise<void> {
     if (this.loaded) return;
-    this.state = (await this.ctx.storage.get<State>("state")) ?? structuredClone(IDLE_STATE);
+    const stored = await this.ctx.storage.get<State>("state");
+    this.state = { ...structuredClone(IDLE_STATE), ...(stored ?? {}) };
     this.loaded = true;
   }
 
@@ -102,6 +115,8 @@ export class SiteCoordinator extends DurableObject<Environment> {
         return this.seed(await req.json());
       case "/complete":
         return this.complete(await req.json());
+      case "/claim-render":
+        return this.claimRender(await req.json());
       case "/finish":
         return this.finish(await req.json());
       default:
@@ -177,6 +192,32 @@ export class SiteCoordinator extends DurableObject<Environment> {
     } satisfies CompleteResponse);
   }
 
+  private async claimRender(body: ClaimRenderRequest): Promise<Response> {
+    if (body.runId !== this.state.runId || !this.state.inFlight.includes(body.url)) {
+      return Response.json({
+        accepted: false,
+        renderedPages: this.state.renderedPages,
+        maxRenderedPages: MAX_RENDERED_PAGES_PER_RUN,
+      } satisfies ClaimRenderResponse);
+    }
+
+    if (this.state.renderedPages >= MAX_RENDERED_PAGES_PER_RUN) {
+      return Response.json({
+        accepted: false,
+        renderedPages: this.state.renderedPages,
+        maxRenderedPages: MAX_RENDERED_PAGES_PER_RUN,
+      } satisfies ClaimRenderResponse);
+    }
+
+    this.state.renderedPages++;
+    await this.save();
+    return Response.json({
+      accepted: true,
+      renderedPages: this.state.renderedPages,
+      maxRenderedPages: MAX_RENDERED_PAGES_PER_RUN,
+    } satisfies ClaimRenderResponse);
+  }
+
   private async finish(body: { runId: string; phase: "done" | "error" }): Promise<Response> {
     if (body.runId === this.state.runId) {
       this.state.phase = body.phase;
@@ -220,6 +261,7 @@ export class SiteCoordinator extends DurableObject<Environment> {
     phase: Phase;
     pagesFound: number;
     pagesCrawled: number;
+    renderedPages: number;
     discoveryMethod: string | null;
     frontierSize: number;
     inFlight: number;
@@ -229,6 +271,7 @@ export class SiteCoordinator extends DurableObject<Environment> {
       phase: this.state.phase,
       pagesFound: this.state.pagesFound,
       pagesCrawled: this.state.pagesCrawled,
+      renderedPages: this.state.renderedPages,
       discoveryMethod: this.state.discoveryMethod,
       frontierSize: this.state.inFlight.length,
       inFlight: this.state.inFlight.length,

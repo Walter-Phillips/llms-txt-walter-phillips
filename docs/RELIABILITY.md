@@ -45,6 +45,12 @@
   When a recrawl receives `304`, the crawler replays those cached links into the
   frontier; if links were never cached or cannot be parsed, it falls back to a
   full body fetch so discovery does not silently shrink.
+- Static extraction remains the default. If static metadata is thin or link
+  discovery finds too few same-origin HTML links, the crawler can claim one of
+  the run's Browser Run slots and render the page through the `BROWSER` binding.
+  The render budget is owned by `SiteCoordinator` so parallel queue consumers
+  cannot overspend it. Local Browser Run development requires Wrangler remote
+  mode; the binding is configured with `remote = true`.
 - Monitoring treats sitemap `<lastmod>` as a hint. It verifies changed-lastmod
   URLs first, then spends the remaining conditional-request budget on due pages
   selected by page-level freshness cadence.
@@ -54,5 +60,6 @@
 - Crawl admission and LLM refinement input are capped at 1,000 pages per run.
 - Toscrape coverage is a manual live network probe, not a CI fixture dependency.
   Run `pnpm test:toscrape:live` when crawler behavior changes to check static
-  Books pages, static Quotes variants, and known JavaScript-rendering gaps
-  against the live site. `make verify` remains deterministic and offline.
+  Books pages and static Quotes variants against the live site. Browser Run
+  fallback verification should use remote Wrangler/browser credentials and stays
+  outside deterministic `make verify`.

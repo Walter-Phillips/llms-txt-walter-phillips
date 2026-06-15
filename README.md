@@ -113,7 +113,7 @@ packages/
 ## Design notes
 
 - **Graceful degradation everywhere.** Crawl: sitemap → bounded same-origin BFS with cached-link replay. Generation: LLM → heuristics. Monitor: sitemap-diff → conditional-GET → content-hash. Every successful run produces a valid file; only quality degrades.
-- **Cheapest signal first.** Prefer sitemap hints and HTTP revalidation before downloading bodies; static HTML fetch is the crawler floor for MVP.
+- **Cheapest signal first.** Prefer sitemap hints and HTTP revalidation before downloading bodies; static HTML fetch is the crawler floor, with budget-capped Browser Run rendering only when static extraction is thin.
 - **Validator gates everything.** `generator/validate.ts` runs before any R2 write. Spec compliance is a verifiable claim, not a vibe.
 - **DO-per-site mutex.** SiteCoordinator owns the URL frontier, dedupes, tracks live progress, and prevents overlapping runs for the same domain — without D1 row-lock gymnastics.
 - **Adaptive monitor cadence.** No hardcoded site taxonomy: priors at registration seed an interval that halves on change-found and 1.5×s on no-change. Self-corrects.

@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Environment } from "../bindings";
 import { politeFetch } from "../crawler/fetcher";
 import { extract } from "../crawler/extract";
+import { renderWithBrowser } from "../crawler/rendered-fetcher";
 import { createTestEnvironment, FakeDatabase } from "../test-helpers";
 import { enqueueGeneratedRun, fetchAndPersistPage } from "./crawl-page";
 
@@ -13,6 +14,10 @@ vi.mock("../crawler/fetcher", () => ({
 
 vi.mock("../crawler/extract", () => ({
   extract: vi.fn(),
+}));
+
+vi.mock("../crawler/rendered-fetcher", () => ({
+  renderWithBrowser: vi.fn(),
 }));
 
 const htmlResponse = {
@@ -81,6 +86,7 @@ describe("fetchAndPersistPage", () => {
       contentHash: "hash",
       links: ["/docs"],
     });
+    vi.mocked(renderWithBrowser).mockResolvedValue(null);
   });
 
   it("does not send conditional validators when link discovery still needs page links", async () => {
@@ -229,6 +235,116 @@ describe("fetchAndPersistPage", () => {
         lastChangedAt: 100,
         pageCheckIntervalS: 302_400,
         pageChangeStreak: 1,
+      }),
+    );
+  });
+
+  it("uses Browser Run output when static extraction is thin and render budget is claimed", async () => {
+    vi.mocked(extract).mockResolvedValue({
+      title: "App",
+      description: null,
+      h1: "Loading",
+      snippet: null,
+      contentHash: "static-hash",
+      links: [],
+    });
+    vi.mocked(renderWithBrowser).mockResolvedValue({
+      page: {
+        title: "Example",
+        description: "Rendered description",
+        h1: "Example",
+        snippet:
+          "Rendered content includes enough useful page text to describe this route in the generated inventory.",
+        contentHash: "rendered-hash",
+        links: ["/docs", "/blog", "/projects"],
+      },
+      browserMsUsed: 1200,
+    });
+    const claimRender = vi.fn(() => Promise.resolve(true));
+    const browser = {} as NonNullable<Environment["BROWSER"]>;
+    const { db, updates } = fetchDatabaseWithStoredPage({
+      id: "page_home",
+      etag: '"old"',
+      lastModified: "Sun, 14 Jun 2026 00:00:00 GMT",
+      contentHash: "old-hash",
+      outLinksJson: JSON.stringify([]),
+      lastChangedAt: 50,
+      pageCheckIntervalS: 604_800,
+      pageChangeStreak: 0,
+    });
+
+    const links = await fetchAndPersistPage({
+      db: db as never,
+      now: 100,
+      message: {
+        type: "page",
+        runId: "run_1",
+        siteId: "site_1",
+        url: "https://example.com/",
+        depth: 0,
+        followLinks: true,
+      },
+      renderFallback: { browser, claimRender },
+    });
+
+    expect(claimRender).toHaveBeenCalledTimes(1);
+    expect(renderWithBrowser).toHaveBeenCalledWith(browser, "https://example.com/");
+    expect(links).toEqual(["/docs", "/blog", "/projects"]);
+    expect(updates).toContainEqual(
+      expect.objectContaining({
+        title: "Example",
+        description: "Rendered description",
+        contentHash: "rendered-hash",
+        outLinksJson: JSON.stringify(["/docs", "/blog", "/projects"]),
+      }),
+    );
+  });
+
+  it("keeps static output when Browser Run budget is exhausted", async () => {
+    vi.mocked(extract).mockResolvedValue({
+      title: "App",
+      description: null,
+      h1: "Loading",
+      snippet: null,
+      contentHash: "static-hash",
+      links: [],
+    });
+    const claimRender = vi.fn(() => Promise.resolve(false));
+    const { db, updates } = fetchDatabaseWithStoredPage({
+      id: "page_home",
+      etag: '"old"',
+      lastModified: "Sun, 14 Jun 2026 00:00:00 GMT",
+      contentHash: "old-hash",
+      outLinksJson: JSON.stringify([]),
+      lastChangedAt: 50,
+      pageCheckIntervalS: 604_800,
+      pageChangeStreak: 0,
+    });
+
+    const links = await fetchAndPersistPage({
+      db: db as never,
+      now: 100,
+      message: {
+        type: "page",
+        runId: "run_1",
+        siteId: "site_1",
+        url: "https://example.com/",
+        depth: 0,
+        followLinks: true,
+      },
+      renderFallback: {
+        browser: {} as NonNullable<Environment["BROWSER"]>,
+        claimRender,
+      },
+    });
+
+    expect(renderWithBrowser).not.toHaveBeenCalled();
+    expect(links).toEqual([]);
+    expect(updates).toContainEqual(
+      expect.objectContaining({
+        title: "App",
+        contentHash: "static-hash",
+        outLinksJson: JSON.stringify([]),
       }),
     );
   });

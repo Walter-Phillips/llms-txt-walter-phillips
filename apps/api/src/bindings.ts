@@ -11,6 +11,20 @@ export type CrawlMessage =
     }
   | { type: "generate"; runId: string; siteId: string };
 
+export interface BrowserRunBinding {
+  quickAction(
+    action: "snapshot",
+    input: {
+      url: string;
+      formats: ["content", "markdown"];
+      gotoOptions: {
+        waitUntil: "networkidle";
+        timeout: number;
+      };
+    },
+  ): Promise<Response>;
+}
+
 export interface MonitorMessage {
   type: "check";
   siteId: string;
@@ -23,6 +37,7 @@ export interface Environment {
   CRAWL_QUEUE: Queue<CrawlMessage>;
   MONITOR_QUEUE: Queue<MonitorMessage>;
   SITE_COORDINATOR: DurableObjectNamespace;
+  BROWSER?: BrowserRunBinding;
   ANTHROPIC_API_KEY: string;
   APP_ORIGIN: string;
   AXIOM_DATASET?: string;

@@ -29,7 +29,7 @@ For each site: paste URL, watch progress, verify generated llms.txt at `/sites/<
 - [ ] Docs site with sitemap (`docs.anthropic.com` or similar)
 - [ ] Blog (`vercel.com/blog` or similar) — confirms Blog section + dated-path rule
 - [ ] Brochure site, no sitemap — confirms BFS path
-- [ ] SPA (e.g. a Next.js demo) — confirms graceful degradation when extraction is thin (documented limitation, should still produce _something_ valid)
+- [ ] SPA (e.g. a Next.js demo) — confirms static extraction falls back to Browser Run when extraction is thin and still produces valid output
 - [ ] Site that 403s bots — confirms friendly error surfacing
 - [ ] Large site (cap behavior) — confirms page cap stops the crawl and we still ship a file
 
