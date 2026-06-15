@@ -13,5 +13,10 @@ export default function sitemap(): MetadataRoute.Sitemap {
       changeFrequency: "monthly",
       priority: 0.7,
     },
+    {
+      url: absoluteUrl("/generations"),
+      changeFrequency: "daily",
+      priority: 0.8,
+    },
   ];
 }

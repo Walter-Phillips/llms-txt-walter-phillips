@@ -10,8 +10,9 @@
 
 - [llms.txt spec](https://llmstxt.org): The open standard this tool produces — a plain-text map of a site for language models.
 - [Generate](/): Paste a URL, watch live crawl progress, land on a result page with the rendered llms.txt, a copy/download path, and a page-inventory table.
-- [Watch](/): Pause or resume monitoring on a result; the system picks an adaptive cadence and regenerates when site structure or page metadata changes.
-- [History](/): View a version timeline with change summaries and diff any two versions inline.
+- [Find generated files](/generations): Search previously generated llms.txt files without starting a new crawl.
+- [Docs](/docs): Learn what llms.txt does and how to proxy the hosted file from infrastructure you control.
+- [Watch and history](/docs): Monitoring can regenerate files when site structure or page metadata changes; version history records changes and supports inline diffs.
 
 ## How it works
 

@@ -271,12 +271,12 @@ function ResultSidebar(props: SidebarProperties): ReactElement {
           <p className="card-k">
             <Icons.clock size={13} /> monitoring
           </p>
-          {/* <Toggle
+          <Toggle
             on={monitoringOn}
             disabled={toggling}
             onChange={onToggle}
             label="Toggle monitoring"
-          /> */}
+          />
         </div>
         <p className="card-note">
           {monitoringOn
