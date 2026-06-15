@@ -1,6 +1,11 @@
 /**
  * Minimal line-based unified diff. Used by the mock API to produce realistic
  * DiffResponse payloads; the real diff is computed server-side.
+ * @param a Original file contents.
+ * @param b Updated file contents.
+ * @param fromLabel Label for the original file header.
+ * @param toLabel Label for the updated file header.
+ * @returns Unified diff text.
  */
 export function unifiedDiff(a: string, b: string, fromLabel: string, toLabel: string): string {
   const al = a.split("\n");
@@ -35,5 +40,10 @@ export function unifiedDiff(a: string, b: string, fromLabel: string, toLabel: st
   while (i < m) body.push(`-${al[i++]}`);
   while (j < n) body.push(`+${bl[j++]}`);
 
-  return [`--- ${fromLabel}`, `+++ ${toLabel}`, `@@ -1,${m} +1,${n} @@`, ...body].join("\n");
+  return [
+    `--- ${fromLabel}`,
+    `+++ ${toLabel}`,
+    `@@ -1,${String(m)} +1,${String(n)} @@`,
+    ...body,
+  ].join("\n");
 }

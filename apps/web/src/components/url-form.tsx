@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, type FormEvent } from "react";
+import { useState, type JSX, type SyntheticEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { api, ApiRequestError, normalizeWebsiteUrl } from "@/lib/api";
 
@@ -20,7 +20,7 @@ function friendlySubmitError(err: unknown): string {
   return "Something went wrong submitting that URL. Please try again.";
 }
 
-export function UrlForm() {
+export function UrlForm(): JSX.Element {
   const router = useRouter();
   const [url, setUrl] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -39,7 +39,7 @@ export function UrlForm() {
     }
   }
 
-  function onSubmit(event: FormEvent<HTMLFormElement>) {
+  function onSubmit(event: SyntheticEvent<HTMLFormElement>): void {
     event.preventDefault();
     void submit(url);
   }
@@ -59,7 +59,9 @@ export function UrlForm() {
           spellCheck={false}
           placeholder="yourproduct.com"
           value={url}
-          onChange={(e) => setUrl(e.target.value)}
+          onChange={(event) => {
+            setUrl(event.target.value);
+          }}
           className="min-w-0 flex-1 bg-transparent px-3 text-base outline-none placeholder:text-ink-soft/60"
         />
         <Button

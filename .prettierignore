@@ -4,13 +4,14 @@
 
 .turbo/
 .wrangler/
-.next/
+**/.next/
 
-dist/
-build/
-node_modules/
+**/dist/
+**/build/
+**/node_modules/
 *.generated.ts
 *.d.ts
-coverage/
+**/coverage/
+**/public/
 
 pnpm-lock.yaml

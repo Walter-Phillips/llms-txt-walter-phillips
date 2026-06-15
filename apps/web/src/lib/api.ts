@@ -31,9 +31,15 @@ export interface LlmsApi {
   getLlmsTxt(domain: string): Promise<string>;
 }
 
+/** Error raised when the Worker API returns a failed response. */
 export class ApiRequestError extends Error {
   readonly status: number;
 
+  /**
+   * Creates an API request error with the HTTP status and user-facing message.
+   * @param status HTTP response status, or 0 when the request never reached the API.
+   * @param message User-facing error message.
+   */
   constructor(status: number, message: string) {
     super(message);
     this.name = "ApiRequestError";
@@ -41,17 +47,30 @@ export class ApiRequestError extends Error {
   }
 }
 
+/**
+ * Returns the configured Worker API base URL.
+ * @returns Absolute base URL for API requests.
+ */
 export function apiBaseUrl(): string {
   return process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8787";
 }
 
+/**
+ * Adds a default HTTPS scheme when a user enters only a hostname.
+ * @param input Raw website URL or hostname from the UI.
+ * @returns Normalized website URL.
+ */
 export function normalizeWebsiteUrl(input: string): string {
   const trimmed = input.trim();
   if (/^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed)) return trimmed;
   return `https://${trimmed}`;
 }
 
-/** The shareable hosted URL for a generated file. */
+/**
+ * The shareable hosted URL for a generated file.
+ * @param originOrDomain Site origin or domain to encode into the public file route.
+ * @returns Public URL for the generated llms.txt file.
+ */
 export function hostedFileUrl(originOrDomain: string): string {
   return `${apiBaseUrl()}/sites/${encodeURIComponent(originOrDomain)}/llms.txt`;
 }
@@ -71,11 +90,11 @@ async function request<T>(
     throw new ApiRequestError(0, "Could not reach the API. Is the Worker running?");
   }
   if (!res.ok) {
-    let message = `Request failed (${res.status})`;
+    let message = `Request failed (${String(res.status)})`;
     try {
       const body: unknown = await res.json();
       if (body && typeof body === "object" && "error" in body) {
-        message = String((body as { error: unknown }).error);
+        message = String(body.error);
       }
     } catch {
       // keep the generic message
@@ -96,8 +115,12 @@ const httpClient: LlmsApi = {
   getVersions: (siteId) =>
     request(`/api/sites/${siteId}/versions`, (d) => versionsResponseSchema.parse(d)),
   getPages: (siteId) => request(`/api/sites/${siteId}/pages`, (d) => pagesResponseSchema.parse(d)),
-  getDiff: (siteId, from, to) =>
-    request(`/api/sites/${siteId}/diff?from=${from}&to=${to}`, (d) => diffResponseSchema.parse(d)),
+  getDiff: (siteId, from, to) => {
+    const params = new URLSearchParams({ from: String(from), to: String(to) });
+    return request(`/api/sites/${siteId}/diff?${params.toString()}`, (d) =>
+      diffResponseSchema.parse(d),
+    );
+  },
   setMonitoring: (siteId, enabled) =>
     request(`/api/sites/${siteId}/monitoring`, (d) => siteResponseSchema.parse(d), {
       method: "PATCH",
@@ -105,11 +128,15 @@ const httpClient: LlmsApi = {
     }),
   getLlmsTxt: async (domain) => {
     const res = await fetch(hostedFileUrl(domain));
-    if (!res.ok) throw new ApiRequestError(res.status, `File not found (${res.status})`);
+    if (!res.ok) throw new ApiRequestError(res.status, `File not found (${String(res.status)})`);
     return res.text();
   },
 };
 
+/**
+ * Reports whether the web app should use the in-memory mock API.
+ * @returns True when mock mode is enabled.
+ */
 export function isMockMode(): boolean {
   return process.env.NEXT_PUBLIC_API_MOCK === "1";
 }

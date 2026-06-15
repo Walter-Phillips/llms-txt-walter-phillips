@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, expect, it, vi } from "vitest";
 import Home from "./page";
+import type * as ApiModule from "@/lib/api";
 
 const { pushMock, createSiteMock } = vi.hoisted(() => ({
   pushMock: vi.fn(),
@@ -12,8 +13,8 @@ vi.mock("next/navigation", () => ({
 }));
 
 vi.mock("@/lib/api", async (importOriginal) => {
-  const mod = await importOriginal<typeof import("@/lib/api")>();
-  return { ...mod, api: { ...mod.api, createSite: createSiteMock } };
+  const apiModule = await importOriginal<typeof ApiModule>();
+  return { ...apiModule, api: { ...apiModule.api, createSite: createSiteMock } };
 });
 
 beforeEach(() => {
@@ -23,7 +24,11 @@ beforeEach(() => {
 
 function submitUrl(value: string) {
   fireEvent.change(screen.getByLabelText("Website URL"), { target: { value } });
-  fireEvent.submit(screen.getByLabelText("Website URL").closest("form")!);
+  const form = screen.getByLabelText("Website URL").closest("form");
+  if (form === null) {
+    throw new Error("Expected Website URL input to be inside a form.");
+  }
+  fireEvent.submit(form);
 }
 
 it("renders the hero, explainer, and example chips", () => {

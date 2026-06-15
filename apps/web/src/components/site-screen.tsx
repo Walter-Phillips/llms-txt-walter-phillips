@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type JSX } from "react";
 import { HistoryView } from "@/components/history-view";
 import { ProgressView } from "@/components/progress-view";
 import { ResultView } from "@/components/result-view";
@@ -8,13 +8,13 @@ import { api } from "@/lib/api";
 
 type Tab = "file" | "history";
 
-export interface SiteScreenProps {
+export interface SiteScreenProperties {
   siteId: string;
   /** Present when arriving from a fresh submission — shows live progress first. */
   runId?: string;
 }
 
-export function SiteScreen({ siteId, runId }: SiteScreenProps) {
+export function SiteScreen({ siteId, runId }: SiteScreenProperties): JSX.Element {
   const [showProgress, setShowProgress] = useState(Boolean(runId));
   const [tab, setTab] = useState<Tab>("file");
   const [domain, setDomain] = useState<string | undefined>(undefined);
@@ -59,7 +59,9 @@ export function SiteScreen({ siteId, runId }: SiteScreenProps) {
               <button
                 key={key}
                 type="button"
-                onClick={() => setTab(key)}
+                onClick={() => {
+                  setTab(key);
+                }}
                 aria-current={tab === key ? "page" : undefined}
                 className={`border px-4 py-2 ${
                   tab === key

@@ -33,10 +33,14 @@ describe("mock API simulation", () => {
 
     vi.setSystemTime(Date.now() + (MOCK_TIMELINE.queuedUntil + MOCK_TIMELINE.crawlingUntil) / 2);
     job = await mockClient.getJob(runId);
+    const crawlingLive = job.live;
     expect(job.run.status).toBe("crawling");
-    expect(job.live?.discoveryMethod).toBe("sitemap");
-    expect(job.live!.pagesCrawled).toBeGreaterThan(0);
-    expect(job.live!.pagesCrawled).toBeLessThan(MOCK_TIMELINE.pagesFound);
+    expect(crawlingLive?.discoveryMethod).toBe("sitemap");
+    if (crawlingLive === undefined) {
+      throw new Error("Expected crawling job to include live progress.");
+    }
+    expect(crawlingLive.pagesCrawled).toBeGreaterThan(0);
+    expect(crawlingLive.pagesCrawled).toBeLessThan(MOCK_TIMELINE.pagesFound);
 
     vi.setSystemTime(Date.now() + MOCK_TIMELINE.generatingUntil);
     job = await mockClient.getJob(runId);

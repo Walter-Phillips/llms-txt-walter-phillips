@@ -15,8 +15,8 @@ const DIFF = [
 it("colors added, removed, hunk, and context lines distinctly", () => {
   render(<DiffView diff={DIFF} />);
   const view = screen.getByTestId("diff-view");
-  const kinds = Array.from(view.querySelectorAll("[data-diff-line]")).map((el) =>
-    el.getAttribute("data-diff-line"),
+  const kinds = Array.from(view.querySelectorAll("[data-diff-line]")).map((element) =>
+    element.getAttribute("data-diff-line"),
   );
   expect(kinds).toEqual(["meta", "meta", "hunk", "ctx", "del", "add", "ctx"]);
 

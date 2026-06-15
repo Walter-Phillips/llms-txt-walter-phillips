@@ -1,5 +1,6 @@
-/** Tiny client-side unified-diff renderer with +/- line coloring. */
-export function DiffView({ diff }: { diff: string }) {
+import type { JSX } from "react";
+
+export function DiffView({ diff }: { diff: string }): JSX.Element {
   const lines = diff.replace(/\n$/, "").split("\n");
   return (
     <pre

@@ -1,7 +1,7 @@
 "use client";
 
 import type { PageInventoryItem } from "@profound-takehome/shared";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type JSX } from "react";
 import { api } from "@/lib/api";
 
 function statusTone(status: string): string {
@@ -10,8 +10,7 @@ function statusTone(status: string): string {
   return "text-accent";
 }
 
-/** Collapsible crawl inventory; pages are fetched on first expand. */
-export function PageInventory({ siteId }: { siteId: string }) {
+export function PageInventory({ siteId }: { siteId: string }): JSX.Element {
   const [open, setOpen] = useState(false);
   const [pages, setPages] = useState<PageInventoryItem[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -36,11 +35,13 @@ export function PageInventory({ siteId }: { siteId: string }) {
     <section className="border-t border-rule">
       <button
         type="button"
-        onClick={() => setOpen((v) => !v)}
+        onClick={() => {
+          setOpen((v) => !v);
+        }}
         aria-expanded={open}
         className="flex w-full items-baseline justify-between py-3 text-left text-xs uppercase tracking-[0.2em] text-ink-soft hover:text-accent"
       >
-        <span>Page inventory{pages ? ` · ${pages.length}` : ""}</span>
+        <span>Page inventory{pages ? ` · ${String(pages.length)}` : ""}</span>
         <span aria-hidden>{open ? "−" : "+"}</span>
       </button>
       {open ? (

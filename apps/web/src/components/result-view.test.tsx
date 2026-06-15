@@ -2,6 +2,7 @@ import type { Site } from "@profound-takehome/shared";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, expect, it, vi } from "vitest";
 import { ResultView } from "./result-view";
+import type * as ApiModule from "@/lib/api";
 
 const { apiMock } = vi.hoisted(() => ({
   apiMock: {
@@ -13,8 +14,8 @@ const { apiMock } = vi.hoisted(() => ({
 }));
 
 vi.mock("@/lib/api", async (importOriginal) => {
-  const mod = await importOriginal<typeof import("@/lib/api")>();
-  return { ...mod, api: { ...mod.api, ...apiMock } };
+  const apiModule = await importOriginal<typeof ApiModule>();
+  return { ...apiModule, api: { ...apiModule.api, ...apiMock } };
 });
 
 const site: Site = {
@@ -87,7 +88,9 @@ it("toggles monitoring and shows the cadence", async () => {
 
   fireEvent.click(toggle);
 
-  await waitFor(() => expect(apiMock.setMonitoring).toHaveBeenCalledWith(site.id, true));
+  await waitFor(() => {
+    expect(apiMock.setMonitoring).toHaveBeenCalledWith(site.id, true);
+  });
   await waitFor(() => expect(toggle).toHaveAttribute("aria-checked", "true"));
   expect(screen.getByText(/checking every 6 hours/i)).toBeInTheDocument();
 });

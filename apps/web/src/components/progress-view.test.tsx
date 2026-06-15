@@ -2,12 +2,13 @@ import type { JobStatusResponse, Run } from "@profound-takehome/shared";
 import { render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, expect, it, vi } from "vitest";
 import { ProgressView } from "./progress-view";
+import type * as ApiModule from "@/lib/api";
 
 const { getJobMock } = vi.hoisted(() => ({ getJobMock: vi.fn() }));
 
 vi.mock("@/lib/api", async (importOriginal) => {
-  const mod = await importOriginal<typeof import("@/lib/api")>();
-  return { ...mod, api: { ...mod.api, getJob: getJobMock } };
+  const apiModule = await importOriginal<typeof ApiModule>();
+  return { ...apiModule, api: { ...apiModule.api, getJob: getJobMock } };
 });
 
 function makeRun(overrides: Partial<Run>): Run {
@@ -63,7 +64,10 @@ it("shows crawl progress with page counts and discovery method", async () => {
 it("indicates link-crawl fallback when there is no sitemap", async () => {
   const status = crawlingStatus();
   status.run.discoveryMethod = "links";
-  status.live!.discoveryMethod = "links";
+  if (status.live === undefined) {
+    throw new Error("Expected crawling status to include live progress.");
+  }
+  status.live.discoveryMethod = "links";
   getJobMock.mockResolvedValue(status);
   render(<ProgressView runId="run_1" onDone={vi.fn()} pollIntervalMs={5} />);
 
@@ -94,7 +98,9 @@ it("advances through generating to done and notifies the caller", async () => {
 
   render(<ProgressView runId="run_1" onDone={onDone} pollIntervalMs={5} />);
 
-  await waitFor(() => expect(onDone).toHaveBeenCalled());
+  await waitFor(() => {
+    expect(onDone).toHaveBeenCalled();
+  });
   expect(screen.getByText("file pressed")).toBeInTheDocument();
 });
 

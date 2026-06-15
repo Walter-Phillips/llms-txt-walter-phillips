@@ -12,7 +12,12 @@ export interface JobStatusState {
   pollError: string | null;
 }
 
-/** Polls GET /api/jobs/:runId until the run reaches a terminal state. */
+/**
+ * Polls GET /api/jobs/:runId until the run reaches a terminal state.
+ * @param runId Crawl run identifier to poll.
+ * @param intervalMs Delay between poll attempts in milliseconds.
+ * @returns Latest job status and any transport-level polling error.
+ */
 export function useJobStatus(
   runId: string,
   intervalMs: number = JOB_POLL_INTERVAL_MS,
@@ -23,20 +28,26 @@ export function useJobStatus(
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
 
-    const tick = async () => {
+    const scheduleNextTick = (): void => {
+      timer = setTimeout(() => {
+        void tick();
+      }, intervalMs);
+    };
+
+    const tick = async (): Promise<void> => {
       try {
         const next = await api.getJob(runId);
         if (cancelled) return;
         setState({ status: next, pollError: null });
         if (next.run.status !== "done" && next.run.status !== "error") {
-          timer = setTimeout(tick, intervalMs);
+          scheduleNextTick();
         }
       } catch (err) {
         if (cancelled) return;
         const message = err instanceof ApiRequestError ? err.message : "Lost contact with the API.";
-        setState((prev) => ({ ...prev, pollError: message }));
+        setState((previous) => ({ ...previous, pollError: message }));
         // Keep polling through transient failures.
-        timer = setTimeout(tick, intervalMs);
+        scheduleNextTick();
       }
     };
 
