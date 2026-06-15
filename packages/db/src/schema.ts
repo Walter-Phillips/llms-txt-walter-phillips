@@ -35,8 +35,13 @@ export const pages = sqliteTable(
     etag: text("etag"),
     lastModified: text("last_modified"),
     sitemapLastmod: text("sitemap_lastmod"),
+    outLinksJson: text("out_links_json"),
     status: text("status").notNull().default("active"),
     lastSeenAt: integer("last_seen_at"),
+    lastCheckedAt: integer("last_checked_at"),
+    lastChangedAt: integer("last_changed_at"),
+    pageCheckIntervalS: integer("page_check_interval_s").notNull().default(604800),
+    pageChangeStreak: integer("page_change_streak").notNull().default(0),
   },
   (t) => ({
     siteUrlIdx: uniqueIndex("pages_site_url_idx").on(t.siteId, t.url),

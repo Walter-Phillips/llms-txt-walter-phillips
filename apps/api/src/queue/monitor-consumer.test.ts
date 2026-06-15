@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { parseSitemapXml } from "../crawler/sitemap";
 import { buildChangeSet } from "../monitor/detect";
+import { selectMonitorCandidates, type ActivePage } from "./monitor-page-freshness";
 import { byDepth, resolveCheck } from "./monitor-consumer";
 
 function requireHash(resolved: ReturnType<typeof resolveCheck>): {
@@ -71,6 +72,79 @@ describe("byDepth", () => {
       "https://example.com/",
       "not a url",
     ]);
+  });
+});
+
+describe("selectMonitorCandidates", () => {
+  const DAY = 24 * 3600;
+  const now = 10 * DAY;
+
+  function active(url: string, fields: Partial<ActivePage> = {}): ActivePage {
+    return {
+      url,
+      etag: null,
+      lastModified: null,
+      sitemapLastmod: null,
+      contentHash: null,
+      lastCheckedAt: null,
+      lastChangedAt: null,
+      pageCheckIntervalS: 7 * DAY,
+      pageChangeStreak: 0,
+      ...fields,
+    };
+  }
+
+  it("checks sitemap lastmod candidates first, then fills with stale active pages", () => {
+    const candidates = selectMonitorCandidates(
+      [
+        active("https://example.com/"),
+        active("https://example.com/docs", { lastCheckedAt: 9 * DAY }),
+        active("https://example.com/blog", { lastCheckedAt: 1 * DAY }),
+      ],
+      {
+        added: [],
+        removed: [],
+        lastmodChanged: ["https://example.com/docs"],
+      },
+      3,
+      now,
+    );
+
+    expect(candidates).toEqual([
+      "https://example.com/docs",
+      "https://example.com/",
+      "https://example.com/blog",
+    ]);
+  });
+
+  it("does not spend conditional budget on sitemap-removed pages", () => {
+    const candidates = selectMonitorCandidates(
+      [active("https://example.com/removed"), active("https://example.com/kept")],
+      {
+        added: [],
+        removed: ["https://example.com/removed"],
+        lastmodChanged: [],
+      },
+      5,
+      now,
+    );
+
+    expect(candidates).toEqual(["https://example.com/kept"]);
+  });
+
+  it("uses oldest last checked time, then depth and URL for no-sitemap sampling", () => {
+    const candidates = selectMonitorCandidates(
+      [
+        active("https://example.com/a/deep", { lastCheckedAt: 1 * DAY }),
+        active("https://example.com/", { lastCheckedAt: 1 * DAY }),
+        active("https://example.com/recent", { lastCheckedAt: 9 * DAY }),
+      ],
+      undefined,
+      2,
+      now,
+    );
+
+    expect(candidates).toEqual(["https://example.com/", "https://example.com/a/deep"]);
   });
 });
 

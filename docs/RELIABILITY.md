@@ -37,6 +37,20 @@
 - Page fetches keep the small default body cap; sitemap fetches use a separate
   protocol-sized cap so large partitioned sitemaps can still seed the bounded
   crawl frontier.
+- Repeat page fetches use HTTP validators when available. The crawler stores
+  `ETag` and `Last-Modified`, sends them back as `If-None-Match` and
+  `If-Modified-Since`, and treats `304 Not Modified` as permission to reuse the
+  stored page metadata.
+- Link-discovery crawls store extracted outbound links, not full HTML bodies.
+  When a recrawl receives `304`, the crawler replays those cached links into the
+  frontier; if links were never cached or cannot be parsed, it falls back to a
+  full body fetch so discovery does not silently shrink.
+- Monitoring treats sitemap `<lastmod>` as a hint. It verifies changed-lastmod
+  URLs first, then spends the remaining conditional-request budget on due pages
+  selected by page-level freshness cadence.
+- Content hashes are computed from extracted page metadata and used as the
+  fallback truth when servers ignore conditional headers or return inconsistent
+  validators.
 - Crawl admission and LLM refinement input are capped at 1,000 pages per run.
 - Toscrape coverage is a manual live network probe, not a CI fixture dependency.
   Run `pnpm test:toscrape:live` when crawler behavior changes to check static

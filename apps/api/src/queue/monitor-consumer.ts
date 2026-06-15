@@ -20,19 +20,17 @@ import {
 import { nextInterval, nextStreak } from "../monitor/schedule";
 import { logError, logInfo } from "../observability/logger";
 import { captureHandledException } from "../observability/sentry";
+import {
+  selectMonitorCandidates,
+  updateCheckedPage,
+  type ActivePage,
+  type MonitorCheckResult,
+} from "./monitor-page-freshness";
 
 /** Hard cap on outbound requests per check (sitemap fetch excluded). */
 const MAX_CONDITIONAL_GETS = 30;
 const MAX_MONITOR_SITEMAP_URLS = 1_000;
 type Database = ReturnType<typeof drizzle>;
-
-interface ActivePage {
-  url: string;
-  etag: string | null;
-  lastModified: string | null;
-  sitemapLastmod: string | null;
-  contentHash: string | null;
-}
 
 interface MonitorSignals {
   sitemap: ReturnType<typeof diffSitemap> | undefined;
@@ -40,13 +38,21 @@ interface MonitorSignals {
   hashes: { url: string; storedHash: string | null; currentHash: string | null }[];
 }
 
+interface MonitorSignalInput {
+  db: Database;
+  siteId: string;
+  activePages: ActivePage[];
+  sitemap: SitemapEntry[] | null;
+  now: number;
+}
+
 /**
  * monitor-queue consumer. For each due site:
- *   1. Sitemap diff (cheap signal) — falls back to conditional GETs over
- *      known pages (shallowest first) when no sitemap is available.
+ *   1. Sitemap diff (cheap signal) — structural changes are acted on
+ *      immediately; lastmod changes are verified.
  *   2. Conditional GETs (ETag/Last-Modified) for candidates.
- *   3. Content-hash compare belongs to the crawl pipeline; here we only act
- *      on HTTP-level signals and let the re-crawl resolve ambiguity.
+ *   3. Content-hash compare for any 200 HTML bodies to suppress validator
+ *      false positives.
  * If a structural or metadata change is detected, kick off a monitor-trigger
  * crawl run (the crawl pipeline re-crawls + regenerates; upserts are
  * idempotent) and mark removed pages in D1.
@@ -97,45 +103,62 @@ async function loadActivePages(db: Database, siteId: string): Promise<ActivePage
       lastModified: pages.lastModified,
       sitemapLastmod: pages.sitemapLastmod,
       contentHash: pages.contentHash,
+      lastCheckedAt: pages.lastCheckedAt,
+      lastChangedAt: pages.lastChangedAt,
+      pageCheckIntervalS: pages.pageCheckIntervalS,
+      pageChangeStreak: pages.pageChangeStreak,
     })
     .from(pages)
     .where(and(eq(pages.siteId, siteId), eq(pages.status, "active")));
 }
 
-async function collectMonitorSignals(
-  activePages: ActivePage[],
-  sitemap: SitemapEntry[] | null,
-): Promise<MonitorSignals> {
+async function collectMonitorSignals(input: MonitorSignalInput): Promise<MonitorSignals> {
   const conditional: { url: string; outcome: ConditionalOutcome }[] = [];
   const hashes: { url: string; storedHash: string | null; currentHash: string | null }[] = [];
   let sitemapDiff: ReturnType<typeof diffSitemap> | undefined;
-  const validators = new Map(activePages.map((page) => [page.url, page]));
+  const validators = new Map(input.activePages.map((page) => [page.url, page]));
 
-  const record = (url: string, result: CheckResult): void => {
-    const resolved = resolveCheck(url, result);
+  const record = async (page: ActivePage, result: MonitorCheckResult): Promise<void> => {
+    const resolved = resolveCheck(page.url, result);
     conditional.push(resolved.conditional);
     if (resolved.hash) hashes.push(resolved.hash);
+    await updateCheckedPage({
+      db: input.db,
+      siteId: input.siteId,
+      page,
+      result,
+      now: input.now,
+    });
   };
 
-  if (sitemap) {
+  if (input.sitemap) {
     // Layer 1: structural diff is nearly free.
-    sitemapDiff = diffSitemap(activePages, sitemap);
-    // Layer 2: verify lastmod candidates with conditional GETs (cheap 304s).
-    for (const url of byDepth(sitemapDiff.lastmodChanged).slice(0, MAX_CONDITIONAL_GETS)) {
+    sitemapDiff = diffSitemap(input.activePages, input.sitemap);
+    // Layer 2: verify lastmod candidates first, then spend the remaining
+    // bounded request budget on due pages. Treat sitemap lastmod as a hint:
+    // many sites do not keep it perfectly accurate.
+    for (const url of selectMonitorCandidates(
+      input.activePages,
+      sitemapDiff,
+      MAX_CONDITIONAL_GETS,
+      input.now,
+    )) {
       const stored = validators.get(url);
       if (!stored) continue;
-      record(url, await conditionalCheck(url, stored));
+      await record(stored, await conditionalCheck(url, stored));
     }
   } else {
-    // No sitemap: sample known pages, shallowest first (homepage and section
-    // roots change most and matter most to llms.txt structure).
-    for (const page of byDepth(activePages.map((activePage) => activePage.url)).slice(
-      0,
+    // No sitemap: sample due known pages, oldest checks first. Depth remains a
+    // tie-breaker so homepage and section roots are preferred when equally stale.
+    for (const url of selectMonitorCandidates(
+      input.activePages,
+      undefined,
       MAX_CONDITIONAL_GETS,
+      input.now,
     )) {
-      const stored = validators.get(page);
+      const stored = validators.get(url);
       if (!stored) continue;
-      record(page, await conditionalCheck(page, stored));
+      await record(stored, await conditionalCheck(url, stored));
     }
   }
 
@@ -233,10 +256,10 @@ async function checkSite(env: Environment, siteId: string): Promise<void> {
   const activePages = await loadActivePages(db, siteId);
   const robots = await fetchRobots(site.domain);
   const sitemap = await fetchSitemap(site.domain, robots.sitemaps);
-  const signals = await collectMonitorSignals(activePages, sitemap);
+  const now = Math.floor(Date.now() / 1000);
+  const signals = await collectMonitorSignals({ db, siteId, activePages, sitemap, now });
   const changes = buildChangeSet(signals);
   const changesFound = isRegenerationWorthy(changes);
-  const now = Math.floor(Date.now() / 1000);
 
   if (changesFound) {
     await enqueueMonitorCrawl({ db, env, siteId, domain: site.domain, changes, now });
@@ -265,18 +288,6 @@ async function checkSite(env: Environment, siteId: string): Promise<void> {
 }
 
 /**
- * Outcome of one conditional GET. When `currentHash` is present we computed a
- * definitive content hash from the fetched body — the caller treats that as
- * authoritative over the conditional `outcome` for "modified" verdicts.
- */
-interface CheckResult {
-  outcome: ConditionalOutcome;
-  storedHash: string | null;
-  /** undefined = no body-level verdict; null = stored had no hash to compare. */
-  currentHash?: string | null;
-}
-
-/**
  * Fold one check into the detection inputs, avoiding double-counting. A
  * definitive content-hash verdict (currentHash present) is authoritative, so
  * we downgrade a conditional "modified" to "unchanged" for that URL — the
@@ -288,7 +299,7 @@ interface CheckResult {
  */
 export function resolveCheck(
   url: string,
-  result: CheckResult,
+  result: MonitorCheckResult,
 ): {
   conditional: { url: string; outcome: ConditionalOutcome };
   hash?: { url: string; storedHash: string | null; currentHash: string | null };
@@ -305,7 +316,7 @@ export function resolveCheck(
 async function conditionalCheck(
   url: string,
   stored: { etag: string | null; lastModified: string | null; contentHash: string | null },
-): Promise<CheckResult> {
+): Promise<MonitorCheckResult> {
   try {
     const res = await politeFetch(url, {
       etag: stored.etag ?? undefined,

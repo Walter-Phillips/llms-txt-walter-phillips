@@ -7,6 +7,7 @@ import { isHtml, politeFetch, type FetchResult } from "../crawler/fetcher";
 import { extract } from "../crawler/extract";
 import { MAX_DEPTH } from "../crawler/frontier";
 import { classify } from "../generator/heuristics";
+import { cachedLinks, fetchedFreshness, unchangedFreshness, type StoredPage } from "./page-cache";
 import { logInfo, logWarn, urlFields } from "../observability/logger";
 
 type Database = ReturnType<typeof drizzle>;
@@ -17,12 +18,6 @@ interface PageWriteInput {
   message: PageMessage;
   existingId: string | undefined;
   now: number;
-}
-
-interface StoredPage {
-  id: string;
-  etag: string | null;
-  lastModified: string | null;
 }
 
 function logPageOutcome(
@@ -44,7 +39,16 @@ function logPageOutcome(
 
 async function getStoredPage(db: Database, message: PageMessage): Promise<StoredPage | undefined> {
   return await db
-    .select({ id: pages.id, etag: pages.etag, lastModified: pages.lastModified })
+    .select({
+      id: pages.id,
+      etag: pages.etag,
+      lastModified: pages.lastModified,
+      contentHash: pages.contentHash,
+      outLinksJson: pages.outLinksJson,
+      lastChangedAt: pages.lastChangedAt,
+      pageCheckIntervalS: pages.pageCheckIntervalS,
+      pageChangeStreak: pages.pageChangeStreak,
+    })
     .from(pages)
     .where(and(eq(pages.siteId, message.siteId), eq(pages.url, message.url)))
     .get();
@@ -57,7 +61,9 @@ function fetchOptionsForPage(
   etag?: string;
   lastModified?: string;
 } {
-  if (message.followLinks === true && message.depth < MAX_DEPTH) return {};
+  if (message.followLinks === true && message.depth < MAX_DEPTH && !cachedLinks(existing)) {
+    return {};
+  }
   return {
     etag: existing?.etag ?? undefined,
     lastModified: existing?.lastModified ?? undefined,
@@ -73,26 +79,38 @@ async function markPageError(input: PageWriteInput): Promise<void> {
       url: input.message.url,
       status: "error",
       lastSeenAt: input.now,
+      lastCheckedAt: input.now,
     })
     .onConflictDoUpdate({
       target: [pages.siteId, pages.url],
-      set: { status: "error", lastSeenAt: input.now },
+      set: { status: "error", lastSeenAt: input.now, lastCheckedAt: input.now },
     });
 }
 
-async function markPageActive(input: PageWriteInput): Promise<void> {
+async function markPageActive(
+  input: PageWriteInput & { existing: StoredPage | undefined },
+): Promise<void> {
   await input.db
     .update(pages)
-    .set({ status: "active", lastSeenAt: input.now })
+    .set({
+      status: "active",
+      lastSeenAt: input.now,
+      ...unchangedFreshness(input.existing, input.now),
+    })
     .where(and(eq(pages.siteId, input.message.siteId), eq(pages.url, input.message.url)));
 }
 
 async function persistHtmlPage(
-  input: PageWriteInput & { body: ReadableStream<Uint8Array>; response: FetchResult },
+  input: PageWriteInput & {
+    body: ReadableStream<Uint8Array>;
+    existing: StoredPage | undefined;
+    response: FetchResult;
+  },
 ): Promise<string[]> {
   const page = await extract(input.body);
   const path = new URL(input.message.url).pathname;
   const { section } = classify(path);
+  const freshness = fetchedFreshness(input.existing, page.contentHash, input.now);
   await input.db
     .insert(pages)
     .values({
@@ -107,8 +125,10 @@ async function persistHtmlPage(
       contentHash: page.contentHash,
       etag: input.response.etag,
       lastModified: input.response.lastModified,
+      outLinksJson: JSON.stringify(page.links),
       status: "active",
       lastSeenAt: input.now,
+      ...freshness,
     })
     .onConflictDoUpdate({
       target: [pages.siteId, pages.url],
@@ -121,8 +141,10 @@ async function persistHtmlPage(
         contentHash: page.contentHash,
         etag: input.response.etag,
         lastModified: input.response.lastModified,
+        outLinksJson: JSON.stringify(page.links),
         status: "active",
         lastSeenAt: input.now,
+        ...freshness,
       },
     });
   return page.links;
@@ -130,16 +152,23 @@ async function persistHtmlPage(
 
 async function handleFetchResponse(
   writeInput: PageWriteInput,
+  existing: StoredPage | undefined,
   response: FetchResult,
 ): Promise<string[] | undefined> {
   if (response.status === 304) {
-    await markPageActive(writeInput);
-    logPageOutcome(writeInput.message, "unchanged", { status: response.status });
+    const links = cachedLinks(existing);
+    await markPageActive({ ...writeInput, existing });
+    logPageOutcome(writeInput.message, "unchanged", {
+      status: response.status,
+      cacheOutcome: links ? "revalidated_304_cached_links" : "revalidated_304",
+    });
+    return links ?? undefined;
   } else if (response.status === 200 && response.body && isHtml(response.contentType)) {
-    const links = await persistHtmlPage({ ...writeInput, body: response.body, response });
+    const links = await persistHtmlPage({ ...writeInput, body: response.body, existing, response });
     logPageOutcome(writeInput.message, "active", {
       status: response.status,
       linkCount: links.length,
+      cacheOutcome: existing ? "revalidated_200" : "miss",
     });
     return links;
   } else {
@@ -179,7 +208,7 @@ export async function fetchAndPersistPage(input: {
       input.message.url,
       fetchOptionsForPage(input.message, existing),
     );
-    return await handleFetchResponse(writeInput, response);
+    return await handleFetchResponse(writeInput, existing, response);
   } catch {
     // Fetch/extract failure for one page must not fail the run.
     await markPageError(writeInput);

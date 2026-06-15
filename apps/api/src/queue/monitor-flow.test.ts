@@ -113,6 +113,9 @@ describe("scheduled monitor update flow", () => {
         lastModified: "Thu, 01 Jan 2026 00:00:00 GMT",
         sitemapLastmod: "2026-01-01",
         contentHash: "home-hash",
+        lastCheckedAt: NOW_SECONDS,
+        pageCheckIntervalS: 7 * DAY,
+        pageChangeStreak: 0,
       },
       {
         url: "https://example.com/old",
@@ -120,6 +123,9 @@ describe("scheduled monitor update flow", () => {
         lastModified: "Thu, 01 Jan 2026 00:00:00 GMT",
         sitemapLastmod: "2026-01-01",
         contentHash: "old-hash",
+        lastCheckedAt: NOW_SECONDS,
+        pageCheckIntervalS: 7 * DAY,
+        pageChangeStreak: 0,
       },
     ]);
     const { env, sendBatch, sendCrawl } = monitorEnvironment(db);
@@ -189,6 +195,9 @@ describe("scheduled monitor update flow", () => {
         lastModified: "Thu, 01 Jan 2026 00:00:00 GMT",
         sitemapLastmod: "2026-01-01",
         contentHash: "home-hash",
+        lastCheckedAt: NOW_SECONDS,
+        pageCheckIntervalS: 7 * DAY,
+        pageChangeStreak: 0,
       },
     ]);
     const { env, sendCrawl } = monitorEnvironment(db);

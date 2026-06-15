@@ -43,6 +43,8 @@ export async function enqueueDueMonitorJobs(env: Environment): Promise<void> {
 
 const HOUR = 3600;
 const WEEK = 7 * 24 * HOUR;
+const MONTH = 30 * 24 * HOUR;
+export const DEFAULT_PAGE_CHECK_INTERVAL_S = WEEK;
 
 /**
  * Adaptive cadence math — pure, easy to unit test. `streak` is the site's
@@ -99,4 +101,34 @@ export function initialInterval(signals: CadenceSignals): number {
 export function nextStreak(current: number, changesFound: boolean): number {
   if (changesFound) return current > 0 ? current + 1 : 1;
   return current < 0 ? current - 1 : -1;
+}
+
+/**
+ * Adaptive per-page revalidation cadence. Site-level cadence decides when a
+ * monitor check runs; page-level cadence decides which pages fit inside that
+ * check's bounded request budget.
+ * - page changed → ÷2, or ÷3 on a strong positive streak (floor 6h)
+ * - unchanged    → ×1.5, or ×2 on a strong negative streak (ceiling 30d)
+ * @param currentS Current page interval in seconds.
+ * @param changed Whether this page changed during the latest check.
+ * @param streak Previous consecutive page change or quiet streak.
+ * @returns Next page interval in seconds.
+ */
+export function nextPageInterval(currentS: number, changed: boolean, streak: number): number {
+  if (changed) {
+    const divisor = streak >= 3 ? 3 : 2;
+    return Math.max(Math.floor(currentS / divisor), 6 * HOUR);
+  }
+  const factor = streak <= -3 ? 2 : 1.5;
+  return Math.min(Math.floor(currentS * factor), MONTH);
+}
+
+/**
+ * Per-page streak bookkeeping.
+ * @param current Current persisted page streak.
+ * @param changed Whether this page changed during the latest check.
+ * @returns Updated signed page streak.
+ */
+export function nextPageStreak(current: number, changed: boolean): number {
+  return nextStreak(current, changed);
 }

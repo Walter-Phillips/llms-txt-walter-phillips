@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { initialInterval, nextInterval, nextStreak } from "./schedule";
+import {
+  initialInterval,
+  nextInterval,
+  nextPageInterval,
+  nextPageStreak,
+  nextStreak,
+} from "./schedule";
 
 const HOUR = 3600;
 const DAY = 24 * HOUR;
@@ -85,5 +91,27 @@ describe("nextStreak", () => {
     expect(nextStreak(4, false)).toBe(-1);
     expect(nextStreak(0, true)).toBe(1);
     expect(nextStreak(0, false)).toBe(-1);
+  });
+});
+
+describe("page-level cadence", () => {
+  const MONTH = 30 * DAY;
+
+  it("shortens page checks on change with a 6h floor", () => {
+    expect(nextPageInterval(WEEK, true, 0)).toBe(84 * HOUR);
+    expect(nextPageInterval(8 * HOUR, true, 0)).toBe(6 * HOUR);
+    expect(nextPageInterval(DAY, true, 3)).toBe(8 * HOUR);
+  });
+
+  it("backs off quiet page checks with a 30d ceiling", () => {
+    expect(nextPageInterval(WEEK, false, 0)).toBe(Math.floor(1.5 * WEEK));
+    expect(nextPageInterval(20 * DAY, false, -3)).toBe(MONTH);
+  });
+
+  it("uses the same signed streak semantics as site cadence", () => {
+    expect(nextPageStreak(2, true)).toBe(3);
+    expect(nextPageStreak(-2, false)).toBe(-3);
+    expect(nextPageStreak(-2, true)).toBe(1);
+    expect(nextPageStreak(2, false)).toBe(-1);
   });
 });

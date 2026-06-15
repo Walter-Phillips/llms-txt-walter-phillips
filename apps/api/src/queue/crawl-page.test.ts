@@ -24,10 +24,23 @@ const htmlResponse = {
   contentEncoding: null,
 };
 
-function fetchDatabaseWithStoredPage(
-  stored: object,
-): ReturnType<typeof createTestEnvironment>["DB"] {
-  return {
+const notModifiedResponse = {
+  status: 304,
+  body: null,
+  etag: '"old"',
+  lastModified: "Sun, 14 Jun 2026 00:00:00 GMT",
+  contentType: "text/html; charset=utf-8",
+  contentEncoding: null,
+};
+
+function fetchDatabaseWithStoredPage(stored: object): {
+  db: ReturnType<typeof createTestEnvironment>["DB"];
+  inserts: Record<string, unknown>[];
+  updates: Record<string, unknown>[];
+} {
+  const inserts: Record<string, unknown>[] = [];
+  const updates: Record<string, unknown>[] = [];
+  const db = {
     select: () => ({
       from: () => ({
         where: () => ({
@@ -36,11 +49,24 @@ function fetchDatabaseWithStoredPage(
       }),
     }),
     insert: () => ({
-      values: () => ({
-        onConflictDoUpdate: () => Promise.resolve(),
+      values: (values: Record<string, unknown>) => ({
+        onConflictDoUpdate: ({ set }: { set: Record<string, unknown> }) => {
+          inserts.push(values);
+          updates.push(set);
+          return Promise.resolve();
+        },
+      }),
+    }),
+    update: () => ({
+      set: (values: Record<string, unknown>) => ({
+        where: () => {
+          updates.push(values);
+          return Promise.resolve();
+        },
       }),
     }),
   } as unknown as ReturnType<typeof createTestEnvironment>["DB"];
+  return { db, inserts, updates };
 }
 
 describe("fetchAndPersistPage", () => {
@@ -58,10 +84,11 @@ describe("fetchAndPersistPage", () => {
   });
 
   it("does not send conditional validators when link discovery still needs page links", async () => {
-    const db = fetchDatabaseWithStoredPage({
+    const { db } = fetchDatabaseWithStoredPage({
       id: "page_home",
       etag: '"old"',
       lastModified: "Sun, 14 Jun 2026 00:00:00 GMT",
+      outLinksJson: null,
     });
 
     const links = await fetchAndPersistPage({
@@ -81,8 +108,70 @@ describe("fetchAndPersistPage", () => {
     expect(links).toEqual(["/docs"]);
   });
 
+  it("uses cached links with conditional validators when link discovery gets a 304", async () => {
+    vi.mocked(politeFetch).mockResolvedValue(notModifiedResponse);
+    const { db, updates } = fetchDatabaseWithStoredPage({
+      id: "page_home",
+      etag: '"old"',
+      lastModified: "Sun, 14 Jun 2026 00:00:00 GMT",
+      outLinksJson: JSON.stringify(["/cached-docs"]),
+      pageCheckIntervalS: 604_800,
+      pageChangeStreak: 0,
+    });
+
+    const links = await fetchAndPersistPage({
+      db: db as never,
+      now: 100,
+      message: {
+        type: "page",
+        runId: "run_1",
+        siteId: "site_1",
+        url: "https://example.com/",
+        depth: 0,
+        followLinks: true,
+      },
+    });
+
+    expect(politeFetch).toHaveBeenCalledWith("https://example.com/", {
+      etag: '"old"',
+      lastModified: "Sun, 14 Jun 2026 00:00:00 GMT",
+    });
+    expect(links).toEqual(["/cached-docs"]);
+    expect(updates).toContainEqual({
+      status: "active",
+      lastSeenAt: 100,
+      lastCheckedAt: 100,
+      pageCheckIntervalS: 907_200,
+      pageChangeStreak: -1,
+    });
+  });
+
+  it("falls back to a full fetch when cached links are unreadable", async () => {
+    const { db } = fetchDatabaseWithStoredPage({
+      id: "page_home",
+      etag: '"old"',
+      lastModified: "Sun, 14 Jun 2026 00:00:00 GMT",
+      outLinksJson: "{not json",
+    });
+
+    await fetchAndPersistPage({
+      db: db as never,
+      now: 100,
+      message: {
+        type: "page",
+        runId: "run_1",
+        siteId: "site_1",
+        url: "https://example.com/",
+        depth: 0,
+        followLinks: true,
+      },
+    });
+
+    expect(politeFetch).toHaveBeenCalledWith("https://example.com/", {});
+  });
+
   it("keeps conditional validators when the page is not expanding the link frontier", async () => {
-    const db = fetchDatabaseWithStoredPage({
+    const { db } = fetchDatabaseWithStoredPage({
       id: "page_home",
       etag: '"old"',
       lastModified: "Sun, 14 Jun 2026 00:00:00 GMT",
@@ -105,6 +194,43 @@ describe("fetchAndPersistPage", () => {
       etag: '"old"',
       lastModified: "Sun, 14 Jun 2026 00:00:00 GMT",
     });
+  });
+
+  it("stores extracted links and freshness metadata on a changed 200 HTML response", async () => {
+    const { db, updates } = fetchDatabaseWithStoredPage({
+      id: "page_home",
+      etag: '"old"',
+      lastModified: "Sun, 14 Jun 2026 00:00:00 GMT",
+      contentHash: "old-hash",
+      outLinksJson: JSON.stringify(["/old"]),
+      lastChangedAt: 50,
+      pageCheckIntervalS: 604_800,
+      pageChangeStreak: 0,
+    });
+
+    await fetchAndPersistPage({
+      db: db as never,
+      now: 100,
+      message: {
+        type: "page",
+        runId: "run_1",
+        siteId: "site_1",
+        url: "https://example.com/",
+        depth: 0,
+        followLinks: false,
+      },
+    });
+
+    expect(updates).toContainEqual(
+      expect.objectContaining({
+        contentHash: "hash",
+        outLinksJson: JSON.stringify(["/docs"]),
+        lastCheckedAt: 100,
+        lastChangedAt: 100,
+        pageCheckIntervalS: 302_400,
+        pageChangeStreak: 1,
+      }),
+    );
   });
 });
 
