@@ -5,6 +5,7 @@ import type {
   ClaimRenderResponse,
   CompleteRequest,
   CompleteResponse,
+  ReleaseRenderRequest,
 } from "../do/site-coordinator";
 import { logError } from "../observability/logger";
 import { captureHandledException } from "../observability/sentry";
@@ -17,10 +18,33 @@ import {
   enqueuePages,
   failRunAfterEnqueueFailure,
 } from "./crawl-queue-helpers";
+import type { RenderFallback } from "./page-render-fallback";
 
 export { enqueuePages } from "./crawl-queue-helpers";
 
 type PageMessage = Extract<CrawlMessage, { type: "page" }>;
+
+function createRenderFallback(
+  env: Environment,
+  message: PageMessage,
+  stub: DurableObjectStub,
+): RenderFallback {
+  return {
+    browser: env.BROWSER,
+    claimRender: async () => {
+      const result = await doCall<ClaimRenderResponse>(stub, "/claim-render", {
+        runId: message.runId,
+        url: message.url,
+      } satisfies ClaimRenderRequest);
+      return result.accepted;
+    },
+    releaseRender: async () => {
+      await doCall<{ renderedPages: number }>(stub, "/release-render", {
+        runId: message.runId,
+      } satisfies ReleaseRenderRequest);
+    },
+  };
+}
 
 async function handlePage(env: Environment, message: PageMessage): Promise<void> {
   const db = drizzle(env.DB);
@@ -30,16 +54,7 @@ async function handlePage(env: Environment, message: PageMessage): Promise<void>
     db,
     message,
     now,
-    renderFallback: {
-      browser: env.BROWSER,
-      claimRender: async () => {
-        const result = await doCall<ClaimRenderResponse>(stub, "/claim-render", {
-          runId: message.runId,
-          url: message.url,
-        } satisfies ClaimRenderRequest);
-        return result.accepted;
-      },
-    },
+    renderFallback: createRenderFallback(env, message, stub),
   });
 
   const completion = await doCall<CompleteResponse>(stub, "/complete", {

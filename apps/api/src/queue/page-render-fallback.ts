@@ -13,6 +13,7 @@ type PageMessage = Extract<CrawlMessage, { type: "page" }>;
 export interface RenderFallback {
   browser: Environment["BROWSER"] | undefined;
   claimRender: () => Promise<boolean>;
+  releaseRender: () => Promise<void>;
 }
 
 export interface ExtractedPageResult {
@@ -52,7 +53,10 @@ export async function extractBestPage(input: {
   if (!accepted) return staticResult(staticPage, quality);
 
   const rendered = await renderBrowserPage(input.message, input.renderFallback.browser, quality);
-  if (!rendered) return staticResult(staticPage, quality);
+  if (!rendered) {
+    await input.renderFallback.releaseRender();
+    return staticResult(staticPage, quality);
+  }
   return chooseRenderedOrStatic(input.message, staticPage, rendered, quality);
 }
 

@@ -58,6 +58,7 @@ async function status(co: Coordinator): Promise<{
   phase: string;
   pagesFound: number;
   pagesCrawled: number;
+  renderedPages: number;
   frontierSize: number;
 }> {
   const res = await co.fetch(new Request("https://do/status"));
@@ -78,6 +79,30 @@ async function claim(
   });
 }
 
+async function seedUrl(
+  co: Coordinator,
+  runId: string,
+  url = "https://example.com/a",
+): Promise<void> {
+  await post(co, "/seed", {
+    runId,
+    urls: [url],
+    baseUrl: "https://example.com/",
+    depth: 0,
+  });
+}
+
+async function claimRender(
+  co: Coordinator,
+  runId: string,
+  url = "https://example.com/a",
+): Promise<PostResult<{ accepted: boolean; renderedPages: number }>> {
+  return post(co, "/claim-render", {
+    runId,
+    url,
+  });
+}
+
 describe("SiteCoordinator", () => {
   it("constructs and reports idle status", async () => {
     await expect(status(coordinator())).resolves.toMatchObject({ phase: "idle", pagesFound: 0 });
@@ -95,6 +120,44 @@ describe("SiteCoordinator", () => {
 
     await post(co, "/finish", { runId: "run-a", phase: "done" });
     await expect(claim(co, "run-b")).resolves.toMatchObject({ status: 200 });
+  });
+
+  it("rejects a fresh active run from a different runId", async () => {
+    const co = coordinator();
+    await claim(co, "run-a");
+
+    await expect(claim(co, "run-b")).resolves.toMatchObject({ status: 409 });
+  });
+
+  it("does not take over an active run before the stale timeout", async () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(0);
+      const co = coordinator();
+      await claim(co, "run-a");
+
+      vi.setSystemTime(59 * 60 * 1000);
+
+      await expect(claim(co, "run-b")).resolves.toMatchObject({ status: 409 });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("takes over a stale active run after the timeout", async () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(0);
+      const co = coordinator();
+      await claim(co, "run-a");
+
+      vi.setSystemTime(60 * 60 * 1000 + 1);
+
+      await expect(claim(co, "run-b")).resolves.toMatchObject({ status: 200 });
+      await expect(status(co)).resolves.toMatchObject({ phase: "discovering" });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("ignores seed calls for foreign runs", async () => {
@@ -261,24 +324,61 @@ describe("SiteCoordinator", () => {
   it("claims browser render budget for in-flight pages only", async () => {
     const co = coordinator();
     await claim(co, "run-a");
-    await post(co, "/seed", {
-      runId: "run-a",
-      urls: ["https://example.com/a"],
-      baseUrl: "https://example.com/",
-      depth: 0,
-    });
+    await seedUrl(co, "run-a");
 
     const foreign = await post<{ accepted: boolean }>(co, "/claim-render", {
       runId: "run-b",
       url: "https://example.com/a",
     });
-    const accepted = await post<{ accepted: boolean; renderedPages: number }>(co, "/claim-render", {
-      runId: "run-a",
-      url: "https://example.com/a",
-    });
+    const accepted = await claimRender(co, "run-a");
 
     expect(foreign.body.accepted).toBe(false);
     expect(accepted.body).toMatchObject({ accepted: true, renderedPages: 1 });
+    expect(await status(co)).toMatchObject({ renderedPages: 1 });
+  });
+
+  it("releases a claimed browser render slot", async () => {
+    const co = coordinator();
+    await claim(co, "run-a");
+    await seedUrl(co, "run-a");
+
+    await expect(claimRender(co, "run-a")).resolves.toMatchObject({
+      body: { accepted: true, renderedPages: 1 },
+    });
+
+    const released = await post<{ renderedPages: number }>(co, "/release-render", {
+      runId: "run-a",
+    });
+
+    expect(released.body.renderedPages).toBe(0);
+    expect(await status(co)).toMatchObject({ renderedPages: 0 });
+  });
+
+  it("does not release browser render slots below zero", async () => {
+    const co = coordinator();
+    await claim(co, "run-a");
+
+    const released = await post<{ renderedPages: number }>(co, "/release-render", {
+      runId: "run-a",
+    });
+
+    expect(released.body.renderedPages).toBe(0);
+    expect(await status(co)).toMatchObject({ renderedPages: 0 });
+  });
+
+  it("ignores browser render release calls for foreign runs", async () => {
+    const co = coordinator();
+    await claim(co, "run-a");
+    await seedUrl(co, "run-a");
+    await expect(claimRender(co, "run-a")).resolves.toMatchObject({
+      body: { accepted: true, renderedPages: 1 },
+    });
+
+    const released = await post<{ renderedPages: number }>(co, "/release-render", {
+      runId: "run-b",
+    });
+
+    expect(released.body.renderedPages).toBe(1);
     expect(await status(co)).toMatchObject({ renderedPages: 1 });
   });
 

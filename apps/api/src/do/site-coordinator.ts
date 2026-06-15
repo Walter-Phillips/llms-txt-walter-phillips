@@ -3,12 +3,16 @@ import type { Environment } from "../bindings";
 import { acceptUrls, MAX_DEPTH, MAX_PAGES } from "../crawler/frontier";
 import { MAX_RENDERED_PAGES_PER_RUN } from "../crawler/render-budget";
 
+/** A run still "active" after this long is treated as crashed and can be taken over. */
+const RUN_STALE_AFTER_MS = 60 * 60 * 1000; // 1 hour
+
 type Phase = "idle" | "discovering" | "crawling" | "generating" | "done" | "error";
 
 interface State {
   runId: string | null;
   phase: Phase;
   origin: string | null;
+  runStartedAt: number | null;
   disallow: string[];
   discoveryMethod: string | null;
   /** sitemap mode ignores discovered links; links mode seeds them (BFS) */
@@ -26,6 +30,7 @@ const IDLE_STATE: State = {
   runId: null,
   phase: "idle",
   origin: null,
+  runStartedAt: null,
   disallow: [],
   discoveryMethod: null,
   followLinks: false,
@@ -63,6 +68,9 @@ export interface CompleteRequest {
 export interface ClaimRenderRequest {
   runId: string;
   url: string;
+}
+export interface ReleaseRenderRequest {
+  runId: string;
 }
 export interface ClaimRenderResponse {
   accepted: boolean;
@@ -117,6 +125,8 @@ export class SiteCoordinator extends DurableObject<Environment> {
         return this.complete(await req.json());
       case "/claim-render":
         return this.claimRender(await req.json());
+      case "/release-render":
+        return this.releaseRender(await req.json());
       case "/finish":
         return this.finish(await req.json());
       default:
@@ -130,11 +140,13 @@ export class SiteCoordinator extends DurableObject<Environment> {
    * @returns Claim status response.
    */
   private async claim(body: ClaimRequest): Promise<Response> {
-    const active =
+    const phaseActive =
       this.state.runId !== null &&
       this.state.runId !== body.runId &&
       ["discovering", "crawling", "generating"].includes(this.state.phase);
-    if (active) {
+    const stale =
+      this.state.runStartedAt !== null && Date.now() - this.state.runStartedAt > RUN_STALE_AFTER_MS;
+    if (phaseActive && !stale) {
       return Response.json({ error: "run_in_progress", runId: this.state.runId }, { status: 409 });
     }
     this.state = {
@@ -142,6 +154,7 @@ export class SiteCoordinator extends DurableObject<Environment> {
       runId: body.runId,
       phase: "discovering",
       origin: body.origin,
+      runStartedAt: Date.now(),
       disallow: body.disallow,
       discoveryMethod: body.discoveryMethod,
       followLinks: body.followLinks,
@@ -216,6 +229,17 @@ export class SiteCoordinator extends DurableObject<Environment> {
       renderedPages: this.state.renderedPages,
       maxRenderedPages: MAX_RENDERED_PAGES_PER_RUN,
     } satisfies ClaimRenderResponse);
+  }
+
+  private async releaseRender(body: ReleaseRenderRequest): Promise<Response> {
+    if (body.runId === this.state.runId && this.state.renderedPages > 0) {
+      this.state.renderedPages--;
+      await this.save();
+    }
+    return Response.json({
+      renderedPages: this.state.renderedPages,
+      maxRenderedPages: MAX_RENDERED_PAGES_PER_RUN,
+    });
   }
 
   private async finish(body: { runId: string; phase: "done" | "error" }): Promise<Response> {

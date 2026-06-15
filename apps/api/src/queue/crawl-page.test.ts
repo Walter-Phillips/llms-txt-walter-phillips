@@ -261,6 +261,7 @@ describe("fetchAndPersistPage", () => {
       browserMsUsed: 1200,
     });
     const claimRender = vi.fn(() => Promise.resolve(true));
+    const releaseRender = vi.fn(() => Promise.resolve());
     const browser = {} as NonNullable<Environment["BROWSER"]>;
     const { db, updates } = fetchDatabaseWithStoredPage({
       id: "page_home",
@@ -284,10 +285,11 @@ describe("fetchAndPersistPage", () => {
         depth: 0,
         followLinks: true,
       },
-      renderFallback: { browser, claimRender },
+      renderFallback: { browser, claimRender, releaseRender },
     });
 
     expect(claimRender).toHaveBeenCalledTimes(1);
+    expect(releaseRender).not.toHaveBeenCalled();
     expect(renderWithBrowser).toHaveBeenCalledWith(browser, "https://example.com/");
     expect(links).toEqual(["/docs", "/blog", "/projects"]);
     expect(updates).toContainEqual(
@@ -310,6 +312,7 @@ describe("fetchAndPersistPage", () => {
       links: [],
     });
     const claimRender = vi.fn(() => Promise.resolve(false));
+    const releaseRender = vi.fn(() => Promise.resolve());
     const { db, updates } = fetchDatabaseWithStoredPage({
       id: "page_home",
       etag: '"old"',
@@ -335,10 +338,12 @@ describe("fetchAndPersistPage", () => {
       renderFallback: {
         browser: {} as NonNullable<Environment["BROWSER"]>,
         claimRender,
+        releaseRender,
       },
     });
 
     expect(renderWithBrowser).not.toHaveBeenCalled();
+    expect(releaseRender).not.toHaveBeenCalled();
     expect(links).toEqual([]);
     expect(updates).toContainEqual(
       expect.objectContaining({

@@ -4,6 +4,7 @@ const UA = "llms-txt-generator/1.0 (+https://llms-txt.example.com/about)";
 
 const TIMEOUT_MS = 10_000;
 const MAX_BODY_BYTES = 2 * 1024 * 1024;
+const MAX_REDIRECTS = 5;
 
 export interface FetchResult {
   status: number;
@@ -28,23 +29,34 @@ export async function politeFetch(
   url: string,
   options: { etag?: string; lastModified?: string; maxBodyBytes?: number } = {},
 ): Promise<FetchResult> {
-  const res = await fetch(url, {
-    headers: buildHeaders(options),
-    redirect: "follow",
-    signal: AbortSignal.timeout(TIMEOUT_MS),
-  });
+  let current = assertAllowedTarget(url);
 
-  await rejectBlockedRedirect(res);
-  const body = await bodyWithinLimit(res, options.maxBodyBytes ?? MAX_BODY_BYTES);
+  for (let hop = 0; ; hop++) {
+    const res = await fetch(current.toString(), {
+      headers: buildHeaders(options),
+      redirect: "manual",
+      signal: AbortSignal.timeout(TIMEOUT_MS),
+    });
 
-  return {
-    status: res.status,
-    body,
-    etag: res.headers.get("etag"),
-    lastModified: res.headers.get("last-modified"),
-    contentType: res.headers.get("content-type"),
-    contentEncoding: res.headers.get("content-encoding"),
-  };
+    if (!isRedirect(res.status)) {
+      const body = await bodyWithinLimit(res, options.maxBodyBytes ?? MAX_BODY_BYTES);
+      return {
+        status: res.status,
+        body,
+        etag: res.headers.get("etag"),
+        lastModified: res.headers.get("last-modified"),
+        contentType: res.headers.get("content-type"),
+        contentEncoding: res.headers.get("content-encoding"),
+      };
+    }
+
+    const location = res.headers.get("location");
+    await res.body?.cancel();
+    if (!location || hop >= MAX_REDIRECTS) {
+      throw new Error(`redirect limit or missing location at ${current.hostname}`);
+    }
+    current = assertAllowedTarget(new URL(location, current).toString());
+  }
 }
 
 function buildHeaders(options: { etag?: string; lastModified?: string }): Record<string, string> {
@@ -54,14 +66,25 @@ function buildHeaders(options: { etag?: string; lastModified?: string }): Record
   return headers;
 }
 
-async function rejectBlockedRedirect(response: Response): Promise<void> {
-  if (!response.url) return;
+function assertAllowedTarget(rawUrl: string): URL {
+  let parsed: URL;
+  try {
+    parsed = new URL(rawUrl);
+  } catch {
+    throw new Error(`invalid fetch url: ${rawUrl}`);
+  }
 
-  const finalHost = new URL(response.url).hostname;
-  if (!isBlockedHost(finalHost)) return;
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    throw new Error(`blocked non-http scheme: ${parsed.protocol}`);
+  }
+  if (isBlockedHost(parsed.hostname)) {
+    throw new Error(`blocked fetch to internal host: ${parsed.hostname}`);
+  }
+  return parsed;
+}
 
-  await response.body?.cancel();
-  throw new Error(`blocked redirect to internal host: ${finalHost}`);
+function isRedirect(status: number): boolean {
+  return status === 301 || status === 302 || status === 303 || status === 307 || status === 308;
 }
 
 async function bodyWithinLimit(
