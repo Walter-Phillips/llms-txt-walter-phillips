@@ -1,7 +1,0 @@
-{
-  "extends": "@profound-takehome/config/tsconfig/base",
-  "compilerOptions": {
-    "jsx": "react-jsx"
-  },
-  "include": ["src/**/*.ts", "src/**/*.tsx"]
-}

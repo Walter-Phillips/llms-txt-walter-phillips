@@ -151,7 +151,7 @@ function crawlLogFor(crawled: number): CrawlLogEntry[] {
   return out;
 }
 
-export function friendlyRunError(error: string | null): string {
+function friendlyRunError(error: string | null): string {
   if (!error) return "The crawl failed for an unknown reason.";
   if (error.startsWith("fetch_failed")) {
     return "We couldn't reach that site. Check the address is right and the site is up, then try again.";

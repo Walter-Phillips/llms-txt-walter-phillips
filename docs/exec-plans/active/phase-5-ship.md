@@ -40,17 +40,11 @@ For each site: paste URL, watch progress, verify generated llms.txt at `/sites/<
 - [ ] Edit a fixture page (or pick a site with active updates) and re-run
 - [ ] Confirm v2 lands with a change summary; diff view renders
 
-## Rate limiting (deferred from Phase 3)
-
-- [ ] Wire the `RATE_LIMIT` KV binding into `POST /api/sites` — per-IP counter, 5/min default
-- [ ] Return 429 with a `retry-after` header on overflow
-
 ## README + demo
 
 - [ ] Confirm `README.md` setup steps work from scratch on a clean clone
 - [ ] Screenshots: landing, progress (with discovery method banner), result with copy/download, history timeline with change summary, diff view
 - [ ] Short demo video (or animated screenshots): paste URL → result → toggle watch → simulate change → v2 with diff
-- [ ] Add a `docs/exec-plans/completed/` move once Phase 5 is done — graduate `llms-txt-generator.md` out of `active/`
 
 ## Repo + submission
 

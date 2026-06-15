@@ -19,7 +19,7 @@ export function formatCadence(checkIntervalS: number): string {
  * @param epoch Timestamp in epoch seconds or epoch milliseconds.
  * @returns JavaScript Date for the timestamp.
  */
-export function toDate(epoch: number): Date {
+function toDate(epoch: number): Date {
   return new Date(epoch < 1e12 ? epoch * 1000 : epoch);
 }
 

@@ -72,7 +72,7 @@ const trustItems = [
   "Crawls are bounded by design: default page cap is 1,000 and depth cap is 3.",
   "The file is metadata, not a full-content dump. It links and describes canonical pages.",
   "The generator cannot invent URLs; output is mapped back to the crawled inventory.",
-  "Static fetch is the default. Browser rendering is a budget-capped fallback for sites that need it.",
+  "Static fetch is the crawler floor for MVP; JavaScript-only sites may produce thinner inventories.",
   "The spec validator gates every generated file before it is written to public storage.",
   "The observer-first product does not require accounts or site ownership to generate a file.",
 ] as const;

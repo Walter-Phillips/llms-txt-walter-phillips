@@ -22,7 +22,7 @@ interface RobotsParseState {
   lastLineWasAgent: boolean;
 }
 
-export const DEFAULT_RULES: RobotsRules = {
+const DEFAULT_RULES: RobotsRules = {
   disallow: [],
   crawlDelayMs: DEFAULT_DELAY_MS,
   sitemaps: [],

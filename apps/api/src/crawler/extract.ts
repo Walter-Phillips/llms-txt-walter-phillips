@@ -162,7 +162,7 @@ function cleanText(input: string): string {
  * @param input - Text to hash.
  * @returns Lowercase hexadecimal digest.
  */
-export async function sha256(input: string): Promise<string> {
+async function sha256(input: string): Promise<string> {
   const buf = new TextEncoder().encode(input);
   const digest = await crypto.subtle.digest("SHA-256", buf);
   return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");

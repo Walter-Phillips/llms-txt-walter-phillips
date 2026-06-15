@@ -33,5 +33,3 @@ export interface Environment {
   SENTRY_DSN?: string;
   SENTRY_TRACES_SAMPLE_RATE?: string;
 }
-
-export type { Environment as Env };

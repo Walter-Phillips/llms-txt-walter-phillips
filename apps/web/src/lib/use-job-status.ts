@@ -4,7 +4,7 @@ import type { JobStatusResponse } from "@profound-takehome/shared";
 import { useEffect, useState } from "react";
 import { api, ApiRequestError } from "./api";
 
-export const JOB_POLL_INTERVAL_MS = 1500;
+const JOB_POLL_INTERVAL_MS = 1500;
 
 export interface JobStatusState {
   status: JobStatusResponse | null;

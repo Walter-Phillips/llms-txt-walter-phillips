@@ -11,10 +11,10 @@
 
 | Area             | Grade | Notes                                                                                                                                                                                                                          |
 | ---------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Product behavior | Good  | Generate, Watch, and History workflows are wired end-to-end; SPA-only rendered fetching remains a known non-goal for MVP.                                                                                                      |
+| Product behavior | Good  | Generate, Watch, and History workflows are wired end-to-end; SPA-only rendering remains a known non-goal for MVP.                                                                                                              |
 | Architecture     | Good  | Boundaries are clear across web, Worker, shared contracts, and storage; the spec validator gates generated file writes.                                                                                                        |
 | Tests            | Fair  | Core parsing, crawling, monitoring, generator, API, and UI behavior have coverage; Durable Object and full generation-pipeline coverage are still thinner. Optional live toscrape probes cover scraper regressions outside CI. |
-| Documentation    | Good  | Product, architecture, reliability, security, and quality docs now describe the current operating model and known gaps.                                                                                                        |
+| Documentation    | Good  | Core docs describe the current operating model and known gaps; completed execution plans are intentionally not retained as long-form context.                                                                                  |
 
 ## Manual Scraping Probe
 

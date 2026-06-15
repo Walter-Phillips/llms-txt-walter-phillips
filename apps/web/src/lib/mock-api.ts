@@ -76,7 +76,7 @@ function titleCase(origin: string): string {
  * @param version Version number to render.
  * @returns Mock llms.txt file contents.
  */
-export function makeLlmsTxt(origin: string, version: number): string {
+function makeLlmsTxt(origin: string, version: number): string {
   const host = hostnameFromOrigin(origin);
   const name = titleCase(origin);
   const lines = [

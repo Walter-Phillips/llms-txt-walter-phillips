@@ -30,7 +30,6 @@
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20260615.1",
-    "@eslint/js": "^9",
     "@profound-takehome/config": "workspace:*",
     "@types/node": "^22.0.0",
     "eslint": "^9.0.0",

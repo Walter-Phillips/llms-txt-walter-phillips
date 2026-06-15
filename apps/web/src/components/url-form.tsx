@@ -5,7 +5,7 @@ import { useState, type JSX, type SyntheticEvent } from "react";
 import { Icons } from "@/components/icons";
 import { api, ApiRequestError, normalizeWebsiteUrl } from "@/lib/api";
 
-export const EXAMPLE_SITES = ["vercel.com", "stripe.com", "hono.dev"] as const;
+const EXAMPLE_SITES = ["vercel.com", "stripe.com", "hono.dev"] as const;
 
 function friendlySubmitError(err: unknown): string {
   if (err instanceof ApiRequestError) {

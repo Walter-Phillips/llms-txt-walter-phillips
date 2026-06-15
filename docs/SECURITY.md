@@ -22,6 +22,7 @@ secret, or web environment variable.
 | `AXIOM_EDGE_URL`            | Worker var    | No                                      | Optional Axiom edge ingest URL.                                                                              |
 | `AXIOM_ORG_ID`              | Worker var    | No                                      | Optional Axiom org ID for personal tokens.                                                                   |
 | `AXIOM_TOKEN`               | Worker secret | No                                      | Enables Axiom log forwarding when paired with `AXIOM_DATASET`; production uses `wrangler secret put`.        |
+| `RATE_LIMIT_ENABLED`        | Worker var    | No                                      | Set to `1` to enforce the KV-backed write-route limiter.                                                     |
 | `SENTRY_DSN`                | Worker secret | No                                      | Enables Sentry error tracking; production uses `wrangler secret put`.                                        |
 | `SENTRY_TRACES_SAMPLE_RATE` | Worker var    | No                                      | Optional Sentry trace sample rate from `0` to `1`; defaults to `0`.                                          |
 | `NEXT_PUBLIC_API_URL`       | Web env       | No                                      | Worker base URL; defaults to `http://localhost:8787`.                                                        |
@@ -29,11 +30,18 @@ secret, or web environment variable.
 
 ### Wrangler Bindings
 
-| Binding            | Type                        | Required                      | Description                                                 |
-| ------------------ | --------------------------- | ----------------------------- | ----------------------------------------------------------- |
-| `DB`               | D1 database                 | Yes                           | Stores sites, crawl runs, pages, and file-version metadata. |
-| `FILES`            | R2 bucket                   | Yes                           | Stores generated `llms.txt` versions.                       |
-| `RATE_LIMIT`       | KV namespace                | Provisioned, not yet enforced | Reserved for API rate limiting.                             |
-| `CRAWL_QUEUE`      | Queue producer and consumer | Yes                           | Drives discovery, page crawling, and generation jobs.       |
-| `MONITOR_QUEUE`    | Queue producer and consumer | Yes                           | Drives scheduled monitoring checks.                         |
-| `SITE_COORDINATOR` | Durable Object              | Yes                           | Owns in-flight crawl frontier and progress state.           |
+| Binding            | Type                        | Required                    | Description                                                 |
+| ------------------ | --------------------------- | --------------------------- | ----------------------------------------------------------- |
+| `DB`               | D1 database                 | Yes                         | Stores sites, crawl runs, pages, and file-version metadata. |
+| `FILES`            | R2 bucket                   | Yes                         | Stores generated `llms.txt` versions.                       |
+| `RATE_LIMIT`       | KV namespace                | Yes when limiter is enabled | Stores fixed-window counters for write-route rate limiting. |
+| `CRAWL_QUEUE`      | Queue producer and consumer | Yes                         | Drives discovery, page crawling, and generation jobs.       |
+| `MONITOR_QUEUE`    | Queue producer and consumer | Yes                         | Drives scheduled monitoring checks.                         |
+| `SITE_COORDINATOR` | Durable Object              | Yes                         | Owns in-flight crawl frontier and progress state.           |
+
+## Rate Limiting
+
+When `RATE_LIMIT_ENABLED=1`, the Worker limits mutating API routes to 10 writes
+per minute per client IP using `RATE_LIMIT`. The limiter fails open if KV is
+unavailable. Public hosted file reads under `/sites/*` remain unrestricted by
+application middleware.

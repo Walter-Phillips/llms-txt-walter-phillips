@@ -19,6 +19,6 @@ Generate a spec-compliant [llms.txt](https://llmstxt.org) for any public website
 
 - **Auth, accounts, multi-user.** Observer-first; auth is layered on later if needed.
 - **Crawling at search-engine depth.** Page cap (default 1,000), depth cap (3). Bounded by design — llms.txt is curated, not exhaustive.
-- **Rendering every site through a headless browser.** Static fetch covers most sites; Browser Rendering is a budget-capped SPA fallback, not the default.
+- **Rendering sites through a headless browser.** Static fetch covers the MVP; SPA-only sites may produce thinner inventories instead of headless rendering.
 - **Inferring brand voice or rewriting marketing copy.** The LLM pass writes a factual summary grounded in crawled content; it never invents URLs or sections.
 - **Embedding full page bodies.** llms.txt links and describes; the file is metadata, not a content dump.

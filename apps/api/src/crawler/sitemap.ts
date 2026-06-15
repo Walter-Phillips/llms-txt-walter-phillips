@@ -12,7 +12,7 @@ export type ParsedSitemap =
 
 const DEFAULT_MAX_SITEMAP_FETCHES = 10;
 const MAX_SITEMAP_BYTES = 50 * 1024 * 1024;
-export const MAX_SITEMAP_URLS = 1_000;
+const MAX_SITEMAP_URLS = 1_000;
 
 function decodeXmlEntities(s: string): string {
   return s

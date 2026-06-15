@@ -3,7 +3,7 @@ import { isBlockedHost } from "../lib/url";
 const UA = "llms-txt-generator/1.0 (+https://llms-txt.example.com/about)";
 
 const TIMEOUT_MS = 10_000;
-export const MAX_BODY_BYTES = 2 * 1024 * 1024;
+const MAX_BODY_BYTES = 2 * 1024 * 1024;
 
 export interface FetchResult {
   status: number;

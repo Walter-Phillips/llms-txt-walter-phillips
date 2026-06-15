@@ -13,7 +13,7 @@ import { requestLogger } from "./observability/request-logger";
  *
  * @returns Configured API application.
  */
-export function buildApp(): Hono<{ Bindings: Environment }> {
+function buildApp(): Hono<{ Bindings: Environment }> {
   const app = new Hono<{ Bindings: Environment }>();
 
   app.use("*", requestLogger());

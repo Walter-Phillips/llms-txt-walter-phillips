@@ -8,7 +8,6 @@ Top-level map for the llms.txt generator.
 - **apps/api** — Cloudflare Worker (Hono). Owns: HTTP API, queue consumers, DO, cron. Bindings: D1, R2, KV, two Queues, one DO class.
 - **packages/db** — Drizzle ORM schema + hand-rolled D1 migrations. Single source of truth for table shapes.
 - **packages/shared** — zod schemas shared by API + web (request/response contracts).
-- **packages/ui** — shared React primitives.
 - **packages/config** — eslint + tsconfig base configs.
 
 ## Boundaries
@@ -21,6 +20,7 @@ Top-level map for the llms.txt generator.
 ## Cross-cutting
 
 - Validation: zod at the HTTP boundary, drizzle types internally.
+- Abuse control: KV-backed fixed-window rate limiting protects write routes when `RATE_LIMIT_ENABLED=1`; public hosted file reads are not rate-limited by the app.
 - Secrets: `wrangler secret` for the Worker; Vercel env for the web.
 - Observability: Pino emits structured JSON logs through `console.*`; Cloudflare
   Workers Logs are enabled with `observability.enabled = true` in wrangler.toml.

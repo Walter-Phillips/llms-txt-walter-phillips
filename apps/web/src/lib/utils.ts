@@ -1,15 +1,3 @@
-import { clsx, type ClassValue } from "clsx";
-import { twMerge } from "tailwind-merge";
-
-/**
- * Merges conditional class names and resolves Tailwind conflicts.
- * @param inputs Class values to combine.
- * @returns Merged class name string.
- */
-export function cn(...inputs: ClassValue[]): string {
-  return twMerge(clsx(inputs));
-}
-
 /**
  * Extracts the bare hostname from a site origin or domain for display.
  * @param originOrDomain Site origin (e.g. "https://acme.dev") or hostname.
