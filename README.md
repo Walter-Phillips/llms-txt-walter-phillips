@@ -2,6 +2,15 @@
 
 An automated [llms.txt](https://llmstxt.org) generation and monitoring service. Paste a URL → crawl the site → produce a spec-compliant llms.txt → optionally watch the site and regenerate when content changes.
 
+<img width="1512" height="950" alt="Screenshot 2026-06-15 at 10 53 58 AM" src="https://github.com/user-attachments/assets/ea89664b-d4c6-4d70-8d8a-8ff55f29bc7e" />
+Home Page
+
+<img width="1512" height="946" alt="Screenshot 2026-06-15 at 10 54 28 AM" src="https://github.com/user-attachments/assets/7634b556-f162-41e0-9cc6-d522cb3f2cf0" />
+Progress Page
+
+<img width="1512" height="948" alt="Screenshot 2026-06-15 at 10 55 24 AM" src="https://github.com/user-attachments/assets/2b4177f3-c399-449e-b884-3b6f925ab2fa" />
+Generated llms.txt Page
+
 ## Stack
 
 - **UI:** Next.js (App Router) on Vercel
