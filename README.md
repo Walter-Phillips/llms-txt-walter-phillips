@@ -67,14 +67,19 @@ pnpm dev
 
 ## Deploy
 
+- **Web:** Vercel is connected to the GitHub repo with `apps/web` as the
+  project root. Production builds need
+  `NEXT_PUBLIC_API_URL=https://llms-txt-api.phillips-walter-n.workers.dev`.
+- **API:** GitHub Actions deploys the Cloudflare Worker on pushes to `main`
+  that touch API/shared/database files. Configure repository secrets:
+  `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN`.
+
+Manual API deploy:
+
 ```bash
-# Worker
 cd apps/api
 pnpm db:migrate:remote
 pnpm deploy
-
-# Web (Vercel)
-# Connect the repo, set NEXT_PUBLIC_API_URL=https://<worker>.workers.dev
 ```
 
 ## Verify
