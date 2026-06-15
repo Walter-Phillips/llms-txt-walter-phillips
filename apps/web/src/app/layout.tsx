@@ -109,7 +109,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         <div className="grid-bg" aria-hidden="true" />
         <AppHeader />
         <main className="appmain">{children}</main>
-        import {Analytics} from "@vercel/analytics/next"
+        <Analytics/>
       </body>
     </html>
   );
