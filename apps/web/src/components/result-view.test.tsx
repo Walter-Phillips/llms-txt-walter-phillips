@@ -1,5 +1,5 @@
 import type { Site } from "@profound-takehome/shared";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, expect, it, vi } from "vitest";
 import { ResultView } from "./result-view";
 import type * as ApiModule from "@/lib/api";
@@ -8,7 +8,6 @@ const { apiMock } = vi.hoisted(() => ({
   apiMock: {
     getSite: vi.fn(),
     getLlmsTxt: vi.fn(),
-    setMonitoring: vi.fn(),
     getPages: vi.fn(),
     getVersions: vi.fn(),
   },
@@ -54,7 +53,6 @@ beforeEach(() => {
     .mockReset()
     .mockResolvedValue({ versions: [makeVersion(3), makeVersion(2), makeVersion(1)] });
   apiMock.getLlmsTxt.mockReset().mockResolvedValue(CONTENT);
-  apiMock.setMonitoring.mockReset();
   apiMock.getPages.mockReset().mockResolvedValue({
     pages: [
       {
@@ -84,25 +82,14 @@ it("renders the file, version history, and hosted URL", async () => {
   expect(screen.getByRole("button", { name: "Download" })).toBeInTheDocument();
 });
 
-it("toggles monitoring and shows the cadence", async () => {
-  apiMock.setMonitoring.mockResolvedValue({
-    site: { ...site, monitoring: 1, nextCheckAt: Date.now() + 21600 * 1000 },
-    latestVersion: null,
-  });
+it("shows monitoring status without exposing a switch", async () => {
   render(<ResultView siteId={site.id} />);
 
-  const toggle = await screen.findByRole("switch", { name: "Toggle monitoring" });
-  expect(toggle).toHaveAttribute("aria-checked", "false");
+  await screen.findByText("# Acme");
 
-  fireEvent.click(toggle);
-
-  await waitFor(() => {
-    expect(apiMock.setMonitoring).toHaveBeenCalledWith(site.id, true);
-  });
-  await waitFor(() => {
-    expect(toggle).toHaveAttribute("aria-checked", "true");
-  });
-  expect(screen.getByText(/auto-refreshing every 6 hours/i)).toBeInTheDocument();
+  expect(screen.getByText("modification window")).toBeInTheDocument();
+  expect(screen.queryByRole("switch", { name: "Toggle monitoring" })).not.toBeInTheDocument();
+  expect(screen.getByText(/monitoring paused\. window is every 6 hours\./i)).toBeInTheDocument();
 });
 
 it("shows the page inventory on the pages tab", async () => {

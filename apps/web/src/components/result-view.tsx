@@ -2,12 +2,11 @@
 
 import type { FileVersion, PageInventoryItem, Site } from "@profound-takehome/shared";
 import Link from "next/link";
-import { useCallback, useEffect, useState, type ReactElement } from "react";
+import { useEffect, useState, type ReactElement } from "react";
 import { CopyButton } from "@/components/copy-button";
 import { Icons } from "@/components/icons";
 import { LlmsText } from "@/components/llms-text";
 import { PageInventory } from "@/components/page-inventory";
-import { Toggle } from "@/components/toggle";
 import { api, hostedFileUrl } from "@/lib/api";
 import { reconstructFromDiff } from "@/lib/diff";
 import { formatCadence, formatRelative } from "@/lib/format";
@@ -20,7 +19,6 @@ interface ResultData {
   versions: FileVersion[];
   pages: PageInventoryItem[];
   error: string | null;
-  setSite: (site: Site) => void;
 }
 
 function useResultData(siteId: string): ResultData {
@@ -52,7 +50,7 @@ function useResultData(siteId: string): ResultData {
     };
   }, [siteId]);
 
-  return { site, versions, pages, error, setSite };
+  return { site, versions, pages, error };
 }
 
 /** Older versions are reconstructed from a diff against the latest version. */
@@ -234,20 +232,30 @@ function VersionHistory({
   );
 }
 
+function formatUpcoming(epoch: number): string {
+  const date = new Date(epoch < 1e12 ? epoch * 1000 : epoch);
+  const diff = date.getTime() - Date.now();
+  if (diff <= 0) return "due now";
+  const minute = 60_000;
+  const hour = 60 * minute;
+  const day = 24 * hour;
+  if (diff < hour) return `in ${String(Math.round(diff / minute))}m`;
+  if (diff < day) return `in ${String(Math.round(diff / hour))}h`;
+  const days = Math.round(diff / day);
+  return days === 1 ? "tomorrow" : `in ${String(days)}d`;
+}
+
 interface SidebarProperties {
   hosted: string;
   site: Site;
   monitoringOn: boolean;
-  toggling: boolean;
-  onToggle: () => void;
   versions: FileVersion[];
   activeVersion: number;
   onSelect: (version: number) => void;
 }
 
 function ResultSidebar(props: SidebarProperties): ReactElement {
-  const { hosted, site, monitoringOn, toggling, onToggle, versions, activeVersion, onSelect } =
-    props;
+  const { hosted, site, monitoringOn, versions, activeVersion, onSelect } = props;
   return (
     <aside className="meta">
       <section className="card">
@@ -269,20 +277,17 @@ function ResultSidebar(props: SidebarProperties): ReactElement {
       <section className="card">
         <div className="card-row">
           <p className="card-k">
-            <Icons.clock size={13} /> monitoring
+            <Icons.clock size={13} /> modification window
           </p>
-          <Toggle
-            on={monitoringOn}
-            disabled={toggling}
-            onChange={onToggle}
-            label="Toggle monitoring"
-          />
         </div>
         <p className="card-note">
           {monitoringOn
-            ? `Auto-refreshing ${formatCadence(site.checkIntervalS)}.`
-            : "Paused. Turn on to auto-refresh when the site changes."}
+            ? `Monitoring ${formatCadence(site.checkIntervalS)}.`
+            : `Monitoring paused. Window is ${formatCadence(site.checkIntervalS)}.`}
         </p>
+        {monitoringOn && site.nextCheckAt !== null ? (
+          <p className="card-note">Next check {formatUpcoming(site.nextCheckAt)}.</p>
+        ) : null}
       </section>
 
       <section className="card">
@@ -295,32 +300,11 @@ function ResultSidebar(props: SidebarProperties): ReactElement {
   );
 }
 
-function useMonitoringToggle(
-  site: Site | null,
-  setSite: (site: Site) => void,
-): { toggling: boolean; toggle: () => void } {
-  const [toggling, setToggling] = useState(false);
-  const toggle = useCallback(() => {
-    if (!site || toggling) return;
-    setToggling(true);
-    void (async () => {
-      try {
-        const res = await api.setMonitoring(site.id, site.monitoring !== 1);
-        setSite(res.site);
-      } finally {
-        setToggling(false);
-      }
-    })();
-  }, [site, toggling, setSite]);
-  return { toggling, toggle };
-}
-
 export function ResultView({ siteId }: { siteId: string }): ReactElement {
-  const { site, versions, pages, error, setSite } = useResultData(siteId);
+  const { site, versions, pages, error } = useResultData(siteId);
   const latestVersion: number | null = versions.length > 0 ? versions[0].version : null;
   const [activeVersion, setActiveVersion] = useState<number | null>(null);
   const [tab, setTab] = useState<Tab>("file");
-  const { toggling, toggle } = useMonitoringToggle(site, setSite);
 
   useEffect(() => {
     if (activeVersion === null && latestVersion !== null) setActiveVersion(latestVersion);
@@ -361,8 +345,6 @@ export function ResultView({ siteId }: { siteId: string }): ReactElement {
           hosted={hosted}
           site={site}
           monitoringOn={site.monitoring === 1}
-          toggling={toggling}
-          onToggle={toggle}
           versions={versions}
           activeVersion={activeVersion}
           onSelect={setActiveVersion}
