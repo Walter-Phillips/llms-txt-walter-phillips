@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { z } from "zod";
 import { nanoid } from "nanoid";
 import { drizzle } from "drizzle-orm/d1";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, like } from "drizzle-orm";
 import { sites, crawlRuns, pages, fileVersions } from "@profound-takehome/db";
 import type { Environment } from "../bindings";
 import { normalizeOrigin } from "../lib/url";
@@ -12,6 +12,50 @@ import { computeDiff, listVersions } from "./files";
 export const sitesRouter = new Hono<{ Bindings: Environment }>();
 
 const createBody = z.object({ url: z.string().url() });
+interface GeneratedSiteRow {
+  site: typeof sites.$inferSelect;
+  latestVersion: typeof fileVersions.$inferSelect;
+}
+
+function normalizeSearchQuery(query: string): string {
+  const trimmed = query.trim();
+  if (!trimmed) return "";
+  const withScheme = /^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+  const origin = normalizeOrigin(withScheme);
+  if (origin) return new URL(origin).hostname;
+  return trimmed
+    .toLowerCase()
+    .replace(/^https?:\/\//, "")
+    .replace(/\/.*$/, "");
+}
+
+sitesRouter.get("/", async (c) => {
+  const db = drizzle(c.env.DB);
+  const query = normalizeSearchQuery(c.req.query("query") ?? "");
+  const siteRows = query
+    ? await db
+        .select()
+        .from(sites)
+        .where(like(sites.domain, `%${query}%`))
+        .orderBy(desc(sites.createdAt))
+        .limit(50)
+    : await db.select().from(sites).orderBy(desc(sites.createdAt)).limit(50);
+
+  const generated: GeneratedSiteRow[] = [];
+  for (const site of siteRows) {
+    const latestVersion = await db
+      .select()
+      .from(fileVersions)
+      .where(eq(fileVersions.siteId, site.id))
+      .orderBy(desc(fileVersions.version))
+      .limit(1)
+      .get();
+    if (latestVersion) generated.push({ site, latestVersion });
+  }
+
+  generated.sort((a, b) => b.latestVersion.createdAt - a.latestVersion.createdAt);
+  return c.json({ sites: generated });
+});
 
 sitesRouter.post("/", async (c) => {
   const parsed = createBody.safeParse(await c.req.json().catch(() => null));

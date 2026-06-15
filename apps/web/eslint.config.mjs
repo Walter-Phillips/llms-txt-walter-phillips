@@ -12,6 +12,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 const compat = new FlatCompat({ baseDirectory: __dirname });
+const webBase = base.filter((config) => !config.plugins?.["@typescript-eslint"]);
 
 const browserGlobals = {
   AbortController: "readonly",
@@ -42,11 +43,11 @@ const browserGlobals = {
 };
 
 export default tseslint.config(
-  base,
+  webBase,
   {
     ignores: ["next-env.d.ts", "playwright-report/**", "test-results/**"],
   },
-  ...compat.extends("next/core-web-vitals", "next/typescript"),
+  ...compat.extends("next/core-web-vitals"),
   ...tseslint.configs.strictTypeChecked,
   ...tseslint.configs.stylisticTypeChecked,
   {

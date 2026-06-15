@@ -14,6 +14,9 @@ export function AppHeader(): ReactElement {
     <header className="appbar">
       <Logo />
       <nav className="appnav">
+        <Link className="appnav-link" href="/generations">
+          generations
+        </Link>
         <Link className="appnav-link" href="/docs">
           docs
         </Link>

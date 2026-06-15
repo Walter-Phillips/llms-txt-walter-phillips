@@ -22,16 +22,22 @@ export function CopyButton({
     [],
   );
 
-  async function copyText(): Promise<void> {
+  async function writeClipboard(value: string): Promise<boolean> {
     try {
-      await navigator.clipboard.writeText(text);
+      await navigator.clipboard.writeText(value);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  async function copyText(): Promise<void> {
+    if (await writeClipboard(text)) {
       setCopied(true);
       clearTimeout(timer.current);
       timer.current = setTimeout(() => {
         setCopied(false);
       }, 1600);
-    } catch {
-      // Clipboard unavailable (insecure context); nothing useful to do.
     }
   }
 

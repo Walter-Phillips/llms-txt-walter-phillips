@@ -2,6 +2,7 @@ import type {
   CreateSiteResponse,
   DiffResponse,
   FileVersion,
+  GeneratedSitesResponse,
   JobStatusResponse,
   PagesResponse,
   PageInventoryItem,
@@ -12,6 +13,7 @@ import type {
 } from "@profound-takehome/shared";
 import { ApiRequestError, type LlmsApi } from "./api";
 import { unifiedDiff } from "./diff";
+import { hostnameFromOrigin, makeLlmsTxt, makePages, titleCase } from "./mock-site-fixtures";
 
 /**
  * In-memory mock of the Worker API. Simulates a full crawl on a wall-clock
@@ -45,152 +47,19 @@ interface MockSite {
   pages: PageInventoryItem[];
 }
 
-type MockPageDefinition = Omit<PageInventoryItem, "url" | "status"> & {
-  path: string;
-  status?: string;
-};
-
 const sites = new Map<string, MockSite>();
 const sitesByOrigin = new Map<string, string>();
 const runs = new Map<string, MockRun>();
 let runCounter = 0;
 
-function hostnameFromOrigin(origin: string): string {
-  return new URL(origin).hostname;
-}
+const DEFAULT_GENERATED_ORIGINS = [
+  "https://vercel.com",
+  "https://stripe.com",
+  "https://hono.dev",
+] as const;
 
 function slugify(origin: string): string {
   return hostnameFromOrigin(origin).replace(/[^a-z0-9]+/gi, "-");
-}
-
-function titleCase(origin: string): string {
-  const name = hostnameFromOrigin(origin)
-    .replace(/^www\./, "")
-    .split(".")[0];
-  return name.charAt(0).toUpperCase() + name.slice(1);
-}
-
-function makeLlmsTxt(origin: string, version: number): string {
-  const host = hostnameFromOrigin(origin);
-  const name = titleCase(origin);
-  const lines = [
-    `# ${name}`,
-    "",
-    `> ${name} builds developer tooling. This file lists the canonical pages of ${host} for language models.`,
-    "",
-    `${name} publishes product pages, documentation, and a changelog. URLs below are stable and crawlable.`,
-    "",
-    "## Docs",
-    "",
-    `- [Quickstart](${origin}/docs/quickstart): Install, configure, and ship in five minutes`,
-    `- [API reference](${origin}/docs/api): Complete endpoint and type reference`,
-    version >= 2
-      ? `- [Authentication](${origin}/docs/auth): Token issuance, scopes, and rotation`
-      : null,
-    `- [Self-hosting](${origin}/docs/self-hosting): Run the platform on your own infrastructure`,
-    "",
-    "## Product",
-    "",
-    `- [Pricing](${origin}/pricing): Plans, limits, and overage policy`,
-    `- [Integrations](${origin}/integrations): First-party connectors and webhooks`,
-    version >= 3 ? `- [Changelog](${origin}/changelog): Dated release notes, newest first` : null,
-    "",
-    "## Optional",
-    "",
-    `- [Blog](${origin}/blog): Engineering notes and release deep-dives`,
-    `- [About](${origin}/about): Company, team, and contact details`,
-  ].filter((l): l is string => l !== null);
-  return lines.join("\n") + "\n";
-}
-
-function page(origin: string, definition: MockPageDefinition): PageInventoryItem {
-  return {
-    url: `${origin}${definition.path}`,
-    title: definition.title,
-    description: definition.description,
-    sectionHint: definition.sectionHint,
-    status: definition.status ?? "ok",
-  };
-}
-
-function makePages(origin: string): PageInventoryItem[] {
-  const definitions: MockPageDefinition[] = [
-    {
-      path: "/",
-      title: `${titleCase(origin)} — Home`,
-      description: "Landing page",
-      sectionHint: null,
-    },
-    {
-      path: "/docs/quickstart",
-      title: "Quickstart",
-      description: "Install and ship in five minutes",
-      sectionHint: "Docs",
-    },
-    {
-      path: "/docs/api",
-      title: "API reference",
-      description: "Endpoints and types",
-      sectionHint: "Docs",
-    },
-    {
-      path: "/docs/auth",
-      title: "Authentication",
-      description: "Tokens, scopes, rotation",
-      sectionHint: "Docs",
-    },
-    {
-      path: "/docs/self-hosting",
-      title: "Self-hosting",
-      description: "Run on your own infra",
-      sectionHint: "Docs",
-    },
-    {
-      path: "/pricing",
-      title: "Pricing",
-      description: "Plans and limits",
-      sectionHint: "Product",
-    },
-    {
-      path: "/integrations",
-      title: "Integrations",
-      description: "Connectors and webhooks",
-      sectionHint: "Product",
-    },
-    {
-      path: "/changelog",
-      title: "Changelog",
-      description: "Release notes",
-      sectionHint: "Product",
-    },
-    {
-      path: "/blog",
-      title: "Blog",
-      description: "Engineering notes",
-      sectionHint: "Optional",
-    },
-    {
-      path: "/about",
-      title: "About",
-      description: "Company and contact",
-      sectionHint: "Optional",
-    },
-    {
-      path: "/admin",
-      title: null,
-      description: null,
-      sectionHint: null,
-      status: "skipped",
-    },
-    {
-      path: "/search",
-      title: "Search",
-      description: null,
-      sectionHint: null,
-      status: "excluded",
-    },
-  ];
-  return definitions.map((definition) => page(origin, definition));
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -378,6 +247,24 @@ function createSite(url: string): CreateSiteResponse {
   return { siteId: record.site.id, runId };
 }
 
+function getGeneratedSites(query?: string): GeneratedSitesResponse {
+  if (sites.size === 0) {
+    for (const origin of DEFAULT_GENERATED_ORIGINS) ensureSite(origin);
+  }
+
+  const needle = query?.trim().toLowerCase() ?? "";
+  const generated = [...sites.values()]
+    .map((record) => {
+      const latest = latestVersion(record);
+      return latest ? { site: { ...record.site }, latestVersion: latest } : null;
+    })
+    .filter((record): record is GeneratedSitesResponse["sites"][number] => record !== null)
+    .filter((record) => record.site.domain.toLowerCase().includes(needle))
+    .sort((a, b) => b.latestVersion.createdAt - a.latestVersion.createdAt);
+
+  return { sites: generated };
+}
+
 function getSite(siteId: string): SiteResponse {
   const record = sites.get(siteId);
   if (!record) throw new ApiRequestError(404, "site_not_found");
@@ -437,6 +324,7 @@ function resolveMock<T>(callback: () => T): Promise<T> {
 
 export const mockClient = {
   createSite: (url) => resolveMock(() => createSite(url)),
+  getGeneratedSites: (query) => resolveMock(() => getGeneratedSites(query)),
   getSite: (siteId) => resolveMock(() => getSite(siteId)),
   getJob: (runId) => resolveMock(() => getJob(runId)),
   getVersions: (siteId) => resolveMock(() => getVersions(siteId)),

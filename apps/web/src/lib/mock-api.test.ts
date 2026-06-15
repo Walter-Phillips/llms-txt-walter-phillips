@@ -3,6 +3,7 @@ import { MOCK_TIMELINE, mockClient, resetMockState } from "./mock-api";
 
 const METHODS = [
   "createSite",
+  "getGeneratedSites",
   "getSite",
   "getJob",
   "getVersions",
@@ -99,6 +100,14 @@ describe("mock API simulation", () => {
     const site = await mockClient.getSite(siteId);
     expect(site.site.monitoring).toBe(1);
     expect(site.site.nextCheckAt).toBe(Date.now() + site.site.checkIntervalS * 1000);
+  });
+
+  it("lists existing generated sites without creating a run", async () => {
+    const result = await mockClient.getGeneratedSites("stripe");
+
+    expect(result.sites).toHaveLength(1);
+    expect(result.sites[0]?.site.domain).toBe("https://stripe.com");
+    expect(result.sites[0]?.latestVersion.version).toBe(2);
   });
 
   it("rejects unparseable URLs with a 400", async () => {

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, type JSX, type SyntheticEvent } from "react";
 import { Icons } from "@/components/icons";
@@ -112,7 +113,8 @@ export function UrlForm(): JSX.Element {
           </span>
         ) : (
           <span className="urlform-hint">
-            Sitemap-first crawl, validated against the spec, hosted at <code>/llms.txt</code>.
+            Sitemap-first crawl, validated against the spec, hosted at <code>/llms.txt</code>.{" "}
+            <Link href="/generations">Find an existing file</Link>
           </span>
         )}
       </div>

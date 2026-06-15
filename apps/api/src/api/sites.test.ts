@@ -1,4 +1,4 @@
-import { sites } from "@profound-takehome/db";
+import { fileVersions, sites } from "@profound-takehome/db";
 import { Hono } from "hono";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Environment } from "../bindings";
@@ -121,6 +121,51 @@ describe("sitesRouter", () => {
       siteId: body.siteId,
       url: "https://example.com",
     });
+  });
+
+  it("lists already generated sites without queueing a crawl", async () => {
+    const generatedSite = {
+      id: "site_generated",
+      domain: "https://example.com",
+      displayName: "Example",
+      monitoring: 1,
+      checkIntervalS: 86400,
+      nextCheckAt: 1781524800,
+      changeStreak: 0,
+      createdAt: 1781438400,
+    };
+    const pendingSite = {
+      ...generatedSite,
+      id: "site_pending",
+      domain: "https://pending.example.com",
+      displayName: "Pending",
+    };
+    const latestVersion = {
+      id: "ver_2",
+      siteId: generatedSite.id,
+      runId: "run_2",
+      version: 2,
+      r2Key: "site_generated/v2.txt",
+      changeSummary: "1 page added",
+      generatedBy: "heuristic",
+      createdAt: 1781438500,
+    };
+    const db = new FakeDatabase();
+    db.queueSelect(sites, [generatedSite, pendingSite]);
+    db.queueSelect(fileVersions, latestVersion);
+    db.queueSelect(fileVersions, undefined);
+    const send = vi.fn(() => Promise.resolve(undefined));
+    const env = createTestEnvironment(db);
+    env.CRAWL_QUEUE = { send } as unknown as Environment["CRAWL_QUEUE"];
+
+    const response = await appForSites().request("/api/sites?query=example.com", undefined, env);
+
+    expect(response.status).toBe(200);
+    expect(await readJson(response)).toEqual({
+      sites: [{ site: generatedSite, latestVersion }],
+    });
+    expect(send).not.toHaveBeenCalled();
+    expect(db.inserts).toEqual([]);
   });
 
   it("reuses an existing site and creates a manual crawl run", async () => {

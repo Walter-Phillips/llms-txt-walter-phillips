@@ -17,6 +17,7 @@ beforeEach(() => {
 it("links to product docs from the persistent header", () => {
   render(<AppHeader />);
 
+  expect(screen.getByRole("link", { name: "generations" })).toHaveAttribute("href", "/generations");
   expect(screen.getByRole("link", { name: "docs" })).toHaveAttribute("href", "/docs");
   expect(screen.getByRole("link", { name: /spec/i })).toHaveAttribute(
     "href",

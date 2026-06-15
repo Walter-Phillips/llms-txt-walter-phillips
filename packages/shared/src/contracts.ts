@@ -117,6 +117,17 @@ export const siteResponseSchema = z.object({
 });
 export type SiteResponse = z.infer<typeof siteResponseSchema>;
 
+export const generatedSiteSchema = z.object({
+  site: siteSchema,
+  latestVersion: fileVersionSchema,
+});
+export type GeneratedSite = z.infer<typeof generatedSiteSchema>;
+
+export const generatedSitesResponseSchema = z.object({
+  sites: z.array(generatedSiteSchema),
+});
+export type GeneratedSitesResponse = z.infer<typeof generatedSitesResponseSchema>;
+
 export const versionsResponseSchema = z.object({ versions: z.array(fileVersionSchema) });
 export type VersionsResponse = z.infer<typeof versionsResponseSchema>;
 

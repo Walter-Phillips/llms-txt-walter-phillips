@@ -109,7 +109,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         <div className="grid-bg" aria-hidden="true" />
         <AppHeader />
         <main className="appmain">{children}</main>
-        <Analytics/>
+        <Analytics />
       </body>
     </html>
   );

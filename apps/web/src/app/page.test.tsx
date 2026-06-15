@@ -39,6 +39,10 @@ it("renders the hero, explainer, and example chips", () => {
   expect(screen.getByText("(/docs#under-the-hood)")).toBeInTheDocument();
   expect(screen.getByText("[Spec]")).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "vercel.com" })).toBeInTheDocument();
+  expect(screen.getByRole("link", { name: /find an existing file/i })).toHaveAttribute(
+    "href",
+    "/generations",
+  );
   expect(screen.getByLabelText("Website URL")).toBeInTheDocument();
 });
 

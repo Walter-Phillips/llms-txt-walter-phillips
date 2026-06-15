@@ -1,12 +1,14 @@
 import {
   createSiteResponseSchema,
   diffResponseSchema,
+  generatedSitesResponseSchema,
   jobStatusResponseSchema,
   pagesResponseSchema,
   siteResponseSchema,
   versionsResponseSchema,
   type CreateSiteResponse,
   type DiffResponse,
+  type GeneratedSitesResponse,
   type JobStatusResponse,
   type PagesResponse,
   type SiteResponse,
@@ -22,6 +24,7 @@ import {
  */
 export interface LlmsApi {
   createSite(url: string): Promise<CreateSiteResponse>;
+  getGeneratedSites(query?: string): Promise<GeneratedSitesResponse>;
   getSite(siteId: string): Promise<SiteResponse>;
   getJob(runId: string): Promise<JobStatusResponse>;
   getVersions(siteId: string): Promise<VersionsResponse>;
@@ -110,6 +113,10 @@ const httpClient: LlmsApi = {
       method: "POST",
       body: JSON.stringify({ url: normalizeWebsiteUrl(url) }),
     }),
+  getGeneratedSites: (query) => {
+    const params = query?.trim() ? `?${new URLSearchParams({ query }).toString()}` : "";
+    return request(`/api/sites${params}`, (d) => generatedSitesResponseSchema.parse(d));
+  },
   getSite: (siteId) => request(`/api/sites/${siteId}`, (d) => siteResponseSchema.parse(d)),
   getJob: (runId) => request(`/api/jobs/${runId}`, (d) => jobStatusResponseSchema.parse(d)),
   getVersions: (siteId) =>
@@ -157,6 +164,7 @@ async function resolveClient(): Promise<LlmsApi> {
 /** Module-level facade so callers can `import { api }` regardless of mode. */
 export const api: LlmsApi = {
   createSite: async (url) => (await resolveClient()).createSite(normalizeWebsiteUrl(url)),
+  getGeneratedSites: async (query) => (await resolveClient()).getGeneratedSites(query),
   getSite: async (siteId) => (await resolveClient()).getSite(siteId),
   getJob: async (runId) => (await resolveClient()).getJob(runId),
   getVersions: async (siteId) => (await resolveClient()).getVersions(siteId),
