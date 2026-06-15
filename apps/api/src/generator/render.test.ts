@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { Inventory } from "./heuristics";
-import { buildInventory, type PageRow } from "./heuristics";
+import { buildInventory, type Inventory, type PageRow } from "./heuristics";
 import { render } from "./render";
 import { validate } from "./validate";
 
@@ -19,16 +18,16 @@ const FIXTURE: Inventory = {
           title: "Docs",
           description: "Documentation home.",
           h1: null,
-          sectionHint: "Documentation"
+          sectionHint: "Documentation",
         },
         {
           url: `${ORIGIN}/docs/api`,
           title: null,
           description: null,
           h1: "API Reference",
-          sectionHint: "Documentation"
-        }
-      ]
+          sectionHint: "Documentation",
+        },
+      ],
     },
     {
       name: "Products",
@@ -38,10 +37,10 @@ const FIXTURE: Inventory = {
           title: "Pricing [2025] | Acme",
           description: null,
           h1: null,
-          sectionHint: "Products"
-        }
-      ]
-    }
+          sectionHint: "Products",
+        },
+      ],
+    },
   ],
   optional: [
     {
@@ -49,9 +48,9 @@ const FIXTURE: Inventory = {
       title: "Privacy",
       description: "Privacy policy.",
       h1: null,
-      sectionHint: "Optional"
-    }
-  ]
+      sectionHint: "Optional",
+    },
+  ],
 };
 
 describe("render", () => {
@@ -67,7 +66,7 @@ describe("render", () => {
   it("falls back to h1 for the title and synthesizes a description", () => {
     const out = render(FIXTURE, "s");
     expect(out).toContain(
-      "- [API Reference](https://example.com/docs/api): API Reference (Documentation)."
+      "- [API Reference](https://example.com/docs/api): API Reference (Documentation).",
     );
   });
 
@@ -95,7 +94,7 @@ describe("render", () => {
         description: "Acme makes widgets.",
         h1: "Acme",
         snippet: null,
-        sectionHint: null
+        sectionHint: null,
       },
       // Bare page: no title/description anywhere — must still render a valid line.
       {
@@ -104,7 +103,7 @@ describe("render", () => {
         description: null,
         h1: null,
         snippet: null,
-        sectionHint: null
+        sectionHint: null,
       },
       {
         url: `${ORIGIN}/terms`,
@@ -112,8 +111,8 @@ describe("render", () => {
         description: null,
         h1: null,
         snippet: null,
-        sectionHint: null
-      }
+        sectionHint: null,
+      },
     ];
     const inv = buildInventory(rows, ORIGIN);
     const out = render(inv, inv.homepageSnippet ?? `Key pages for ${inv.siteName}.`);

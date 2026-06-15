@@ -10,12 +10,12 @@ export const sites = sqliteTable(
     checkIntervalS: integer("check_interval_s").notNull().default(86400),
     nextCheckAt: integer("next_check_at"),
     changeStreak: integer("change_streak").notNull().default(0),
-    createdAt: integer("created_at").notNull()
+    createdAt: integer("created_at").notNull(),
   },
   (t) => ({
     domainIdx: uniqueIndex("sites_domain_idx").on(t.domain),
-    dueIdx: index("sites_due_idx").on(t.monitoring, t.nextCheckAt)
-  })
+    dueIdx: index("sites_due_idx").on(t.monitoring, t.nextCheckAt),
+  }),
 );
 
 export const pages = sqliteTable(
@@ -36,13 +36,13 @@ export const pages = sqliteTable(
     lastModified: text("last_modified"),
     sitemapLastmod: text("sitemap_lastmod"),
     status: text("status").notNull().default("active"),
-    lastSeenAt: integer("last_seen_at")
+    lastSeenAt: integer("last_seen_at"),
   },
   (t) => ({
     siteUrlIdx: uniqueIndex("pages_site_url_idx").on(t.siteId, t.url),
     siteIdx: index("pages_site_idx").on(t.siteId),
-    siteStatusIdx: index("pages_site_status_idx").on(t.siteId, t.status)
-  })
+    siteStatusIdx: index("pages_site_status_idx").on(t.siteId, t.status),
+  }),
 );
 
 export const crawlRuns = sqliteTable(
@@ -62,11 +62,11 @@ export const crawlRuns = sqliteTable(
     capReason: text("cap_reason"),
     error: text("error"),
     startedAt: integer("started_at"),
-    finishedAt: integer("finished_at")
+    finishedAt: integer("finished_at"),
   },
   (t) => ({
-    siteIdx: index("runs_site_idx").on(t.siteId)
-  })
+    siteIdx: index("runs_site_idx").on(t.siteId),
+  }),
 );
 
 export const fileVersions = sqliteTable(
@@ -81,9 +81,9 @@ export const fileVersions = sqliteTable(
     r2Key: text("r2_key").notNull(),
     changeSummary: text("change_summary"),
     generatedBy: text("generated_by"),
-    createdAt: integer("created_at").notNull()
+    createdAt: integer("created_at").notNull(),
   },
   (t) => ({
-    siteVersionIdx: uniqueIndex("versions_site_version_idx").on(t.siteId, t.version)
-  })
+    siteVersionIdx: uniqueIndex("versions_site_version_idx").on(t.siteId, t.version),
+  }),
 );

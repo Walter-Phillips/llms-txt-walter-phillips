@@ -9,18 +9,18 @@ const buttonVariants = cva(
     variants: {
       variant: {
         default: "bg-slate-950 text-white hover:bg-slate-800",
-        outline: "border border-slate-200 bg-white hover:bg-slate-50"
+        outline: "border border-slate-200 bg-white hover:bg-slate-50",
       },
       size: {
         default: "h-10 px-4 py-2",
-        icon: "h-10 w-10"
-      }
+        icon: "h-10 w-10",
+      },
     },
     defaultVariants: {
       variant: "default",
-      size: "default"
-    }
-  }
+      size: "default",
+    },
+  },
 );
 
 export interface ButtonProps
@@ -34,7 +34,7 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
     return (
       <Comp className={cn(buttonVariants({ variant, size, className }))} ref={ref} {...props} />
     );
-  }
+  },
 );
 Button.displayName = "Button";
 

@@ -1,14 +1,19 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { healthResponseSchema } from "@profound-takehome/shared";
-import type { Env } from "./bindings";
+import type { Environment } from "./bindings";
 import { sitesRouter } from "./api/sites";
 import { jobsRouter } from "./api/jobs";
 import { filesRouter } from "./api/files";
 import { rateLimit } from "./middleware/rate-limit";
 
-export function buildApp() {
-  const app = new Hono<{ Bindings: Env }>();
+/**
+ * Builds the Hono app with middleware and API routes.
+ *
+ * @returns Configured API application.
+ */
+export function buildApp(): Hono<{ Bindings: Environment }> {
+  const app = new Hono<{ Bindings: Environment }>();
 
   app.use("/api/*", cors());
   // The hosted file is public and meant to be fetched cross-origin (UI, proxies).

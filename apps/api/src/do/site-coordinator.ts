@@ -1,10 +1,10 @@
 import { DurableObject } from "cloudflare:workers";
-import type { Env } from "../bindings";
+import type { Environment } from "../bindings";
 import { acceptUrls, MAX_DEPTH, MAX_PAGES } from "../crawler/frontier";
 
 type Phase = "idle" | "discovering" | "crawling" | "generating" | "done" | "error";
 
-type State = {
+interface State {
   runId: string | null;
   phase: Phase;
   origin: string | null;
@@ -18,7 +18,7 @@ type State = {
   seen: string[];
   depths: Record<string, number>;
   capped: boolean;
-};
+}
 
 const IDLE_STATE: State = {
   runId: null,
@@ -32,19 +32,31 @@ const IDLE_STATE: State = {
   inFlight: [],
   seen: [],
   depths: {},
-  capped: false
+  capped: false,
 };
 
-export type ClaimRequest = {
+export interface ClaimRequest {
   runId: string;
   origin: string;
   disallow: string[];
   discoveryMethod: string;
   followLinks: boolean;
-};
-export type SeedRequest = { runId: string; urls: string[]; baseUrl: string; depth: number };
-export type SeedResponse = { accepted: { url: string; depth: number }[] };
-export type CompleteRequest = { runId: string; url: string; links?: string[]; depth: number };
+}
+export interface SeedRequest {
+  runId: string;
+  urls: string[];
+  baseUrl: string;
+  depth: number;
+}
+export interface SeedResponse {
+  accepted: { url: string; depth: number }[];
+}
+export interface CompleteRequest {
+  runId: string;
+  url: string;
+  links?: string[];
+  depth: number;
+}
 export type CompleteResponse = SeedResponse & {
   drained: boolean;
   pagesFound: number;
@@ -59,7 +71,7 @@ export type CompleteResponse = SeedResponse & {
  * State here is *runtime* coordination state (persisted to DO storage so it
  * survives eviction). D1 is the durable record once a run finishes.
  */
-export class SiteCoordinator extends DurableObject<Env> {
+export class SiteCoordinator extends DurableObject<Environment> {
   private state: State = IDLE_STATE;
   private loaded = false;
 
@@ -73,6 +85,11 @@ export class SiteCoordinator extends DurableObject<Env> {
     await this.ctx.storage.put("state", this.state);
   }
 
+  /**
+   * Route coordinator requests to status and run-state mutations.
+   * @param req Incoming Durable Object request.
+   * @returns HTTP response for the requested coordinator operation.
+   */
   async fetch(req: Request): Promise<Response> {
     await this.load();
     const url = new URL(req.url);
@@ -80,19 +97,23 @@ export class SiteCoordinator extends DurableObject<Env> {
       case "/status":
         return Response.json(this.snapshot());
       case "/claim":
-        return this.claim((await req.json()) as ClaimRequest);
+        return this.claim(await req.json());
       case "/seed":
-        return this.seed((await req.json()) as SeedRequest);
+        return this.seed(await req.json());
       case "/complete":
-        return this.complete((await req.json()) as CompleteRequest);
+        return this.complete(await req.json());
       case "/finish":
-        return this.finish((await req.json()) as { runId: string; phase: "done" | "error" });
+        return this.finish(await req.json());
       default:
         return new Response("not found", { status: 404 });
     }
   }
 
-  /** Per-site mutex: a new run can only start when no run is active. */
+  /**
+   * Per-site mutex: a new run can only start when no run is active.
+   * @param body Run metadata used to claim the coordinator.
+   * @returns Claim status response.
+   */
   private async claim(body: ClaimRequest): Promise<Response> {
     const active =
       this.state.runId !== null &&
@@ -108,7 +129,7 @@ export class SiteCoordinator extends DurableObject<Env> {
       origin: body.origin,
       disallow: body.disallow,
       discoveryMethod: body.discoveryMethod,
-      followLinks: body.followLinks
+      followLinks: body.followLinks,
     };
     await this.save();
     return Response.json({ ok: true });
@@ -129,7 +150,7 @@ export class SiteCoordinator extends DurableObject<Env> {
         drained: false,
         pagesFound: 0,
         pagesCrawled: 0,
-        capped: false
+        capped: false,
       } satisfies CompleteResponse);
     }
 
@@ -152,7 +173,7 @@ export class SiteCoordinator extends DurableObject<Env> {
       drained,
       pagesFound: this.state.pagesFound,
       pagesCrawled: this.state.pagesCrawled,
-      capped: this.state.capped
+      capped: this.state.capped,
     } satisfies CompleteResponse);
   }
 
@@ -167,7 +188,7 @@ export class SiteCoordinator extends DurableObject<Env> {
   private admit(
     candidates: string[],
     baseUrl: string,
-    depth: number
+    depth: number,
   ): { url: string; depth: number }[] {
     const seen = new Set(this.state.seen);
     const pageBudget = Math.max(0, MAX_PAGES - this.state.pagesFound);
@@ -177,7 +198,7 @@ export class SiteCoordinator extends DurableObject<Env> {
       origin: this.state.origin ?? "",
       seen,
       disallow: this.state.disallow,
-      pageBudget
+      pageBudget,
     });
     if (
       (pageBudget === 0 && candidates.length > 0) ||
@@ -194,7 +215,15 @@ export class SiteCoordinator extends DurableObject<Env> {
     return urls.map((url) => ({ url, depth }));
   }
 
-  private snapshot() {
+  private snapshot(): {
+    runId: string | null;
+    phase: Phase;
+    pagesFound: number;
+    pagesCrawled: number;
+    discoveryMethod: string | null;
+    frontierSize: number;
+    inFlight: number;
+  } {
     return {
       runId: this.state.runId,
       phase: this.state.phase,
@@ -202,7 +231,7 @@ export class SiteCoordinator extends DurableObject<Env> {
       pagesCrawled: this.state.pagesCrawled,
       discoveryMethod: this.state.discoveryMethod,
       frontierSize: this.state.inFlight.length,
-      inFlight: this.state.inFlight.length
+      inFlight: this.state.inFlight.length,
     };
   }
 }

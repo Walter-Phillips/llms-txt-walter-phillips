@@ -1,106 +1,41 @@
 import { drizzle } from "drizzle-orm/d1";
-import { and, eq } from "drizzle-orm";
-import { nanoid } from "nanoid";
-import { crawlRuns, pages, sites } from "@profound-takehome/db";
-import type { CrawlMessage, Env } from "../bindings";
+import { eq } from "drizzle-orm";
+import { crawlRuns } from "@profound-takehome/db";
+import type { CrawlMessage, Environment } from "../bindings";
 import { fetchRobots } from "../crawler/robots";
-import { discoverSitemapEntries, type SitemapEntry } from "../crawler/sitemap";
-import { politeFetch, isHtml } from "../crawler/fetcher";
-import { extract } from "../crawler/extract";
-import { classify } from "../generator/heuristics";
+import { discoverSitemapEntries } from "../crawler/sitemap";
 import { generate } from "../generator";
-import { initialInterval, type CadenceSignals } from "../monitor/schedule";
 import type {
-  ClaimRequest,
   CompleteRequest,
   CompleteResponse,
   SeedRequest,
-  SeedResponse
+  SeedResponse,
 } from "../do/site-coordinator";
+import { aliasSitemapEntries } from "./crawl-discovery";
+import {
+  applyDiscoveryCadence,
+  claimDiscovery,
+  finishEmptyRun,
+  markRunCrawling,
+  persistSitemapPages,
+} from "./crawl-discover-handler";
+import { enqueueGeneratedRun, fetchAndPersistPage } from "./crawl-page";
 
 const MIN_SITEMAP_URLS = 3;
+type Database = ReturnType<typeof drizzle>;
+type DiscoverMessage = Extract<CrawlMessage, { type: "discover" }>;
+type PageMessage = Extract<CrawlMessage, { type: "page" }>;
+type AcceptedUrl = SeedResponse["accepted"][number];
 
-/** Dated path segment like /2024/06/ — a strong blog/archive freshness signal. */
-const DATED_URL = /\/\d{4}\/\d{2}\//;
-/** A URL share above this counts the site as "dated" (blog-heavy). */
-const DATED_URL_SHARE = 0.2;
-
-/**
- * Derive freshness priors from data already in hand after discovery — no extra
- * fetches. `hasRss` stays unset because detecting a feed would mean another
- * network round-trip on the hot crawl path.
- */
-export function deriveSignals(input: {
-  urls: string[];
-  pageCount: number;
-  isNewsSitemap: boolean;
-}): CadenceSignals {
-  const dated = input.urls.filter((u) => DATED_URL.test(u)).length;
-  const hasDatedUrls = input.urls.length > 0 && dated / input.urls.length >= DATED_URL_SHARE;
-  return {
-    pageCount: input.pageCount,
-    hasNewsSitemap: input.isNewsSitemap,
-    hasDatedUrls
-  };
+interface EnqueueFailureInput {
+  db: Database;
+  stub: DurableObjectStub;
+  runId: string;
+  context: string;
+  error: unknown;
 }
 
-/**
- * Persist the first-check interval prior — but only on the site's initial
- * crawl. Re-crawls (manual or monitor-triggered) leave the stored interval
- * alone so the adaptive feedback loop's tuning survives.
- */
-export async function applyCadencePrior(
-  db: Pick<ReturnType<typeof drizzle>, "update">,
-  siteId: string,
-  trigger: string | undefined,
-  signals: Parameters<typeof deriveSignals>[0]
-): Promise<void> {
-  if (trigger !== "initial") return;
-  await db
-    .update(sites)
-    .set({ checkIntervalS: initialInterval(deriveSignals(signals)) })
-    .where(eq(sites.id, siteId));
-}
-
-/**
- * Some hosts (e.g. GitHub Pages on a custom domain) publish a sitemap whose
- * every `<loc>` points to the canonical host rather than the domain the user
- * entered. Left alone, the SiteCoordinator's same-origin frontier rejects every
- * such entry and the run errors with "no crawlable pages found".
- *
- * When the entries form a single foreign origin we treat that origin as a
- * canonical-host alias and rewrite each url onto the entered origin, preserving
- * path/query/hash and lastmod. Mixed or already-same-origin sets are left
- * untouched so the frontier still drops genuinely-external URLs.
- */
-export function aliasSitemapEntries(entries: SitemapEntry[], origin: string): SitemapEntry[] {
-  const enteredOrigin = new URL(origin).origin;
-  const origins = new Set<string>();
-  for (const entry of entries) {
-    try {
-      origins.add(new URL(entry.url).origin);
-    } catch {
-      // Skip unparseable urls when counting distinct origins.
-    }
-  }
-
-  // Only rewrite a clean single-foreign-origin set; mixed or same-origin sets
-  // keep their urls so the same-origin frontier filter still applies.
-  if (origins.size !== 1) return entries;
-  const [only] = origins;
-  if (only === enteredOrigin) return entries;
-
-  return entries.map((entry) => {
-    try {
-      const parsed = new URL(entry.url);
-      return { ...entry, url: `${enteredOrigin}${parsed.pathname}${parsed.search}${parsed.hash}` };
-    } catch {
-      return entry;
-    }
-  });
-}
-
-function coordinator(env: Env, siteId: string): DurableObjectStub {
+function coordinator(env: Environment, siteId: string): DurableObjectStub {
   return env.SITE_COORDINATOR.get(env.SITE_COORDINATOR.idFromName(siteId));
 }
 
@@ -108,59 +43,99 @@ async function doCall<T>(stub: DurableObjectStub, path: string, body: unknown): 
   const res = await stub.fetch(`https://do${path}`, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify(body)
+    body: JSON.stringify(body),
   });
-  if (!res.ok) throw new Error(`DO ${path} → ${res.status}: ${await res.text()}`);
-  return (await res.json()) as T;
+  if (!res.ok) throw new Error(`DO ${path} → ${String(res.status)}: ${await res.text()}`);
+  const payload = (await res.json()) as T;
+  return payload;
 }
 
-/** Stagger page fetches to stay polite without a per-domain scheduler. */
+/**
+ * Stagger page fetches to stay polite without a per-domain scheduler.
+ * @param env Worker bindings containing the crawl queue.
+ * @param runId Crawl run receiving page messages.
+ * @param siteId Site whose pages are being enqueued.
+ * @param urls Accepted URLs with crawl depth.
+ */
 async function enqueuePages(
-  env: Env,
+  env: Environment,
   runId: string,
   siteId: string,
-  urls: { url: string; depth: number }[]
+  urls: { url: string; depth: number }[],
 ): Promise<void> {
   if (urls.length === 0) return;
   await env.CRAWL_QUEUE.sendBatch(
     urls.map(({ url, depth }, i) => ({
       body: { type: "page" as const, runId, siteId, url, depth },
-      delaySeconds: Math.floor(i / 4)
-    }))
+      delaySeconds: Math.floor(i / 4),
+    })),
   );
 }
 
-async function failRunAfterEnqueueFailure(
-  db: ReturnType<typeof drizzle>,
-  stub: DurableObjectStub,
-  runId: string,
-  context: string,
-  err: unknown
-): Promise<void> {
-  const detail = err instanceof Error ? err.message : String(err);
+async function failRunAfterEnqueueFailure(input: EnqueueFailureInput): Promise<void> {
+  const detail = input.error instanceof Error ? input.error.message : String(input.error);
+  const { db, runId, stub } = input;
   await db
     .update(crawlRuns)
     .set({
       status: "error",
-      error: `failed to enqueue ${context}: ${detail}`,
-      finishedAt: Math.floor(Date.now() / 1000)
+      error: `failed to enqueue ${input.context}: ${detail}`,
+      finishedAt: Math.floor(Date.now() / 1000),
     })
     .where(eq(crawlRuns.id, runId));
 
   try {
     await doCall(stub, "/finish", { runId, phase: "error" });
-  } catch (finishErr) {
-    console.error("failed to mark DO run error after enqueue failure", { runId, finishErr });
+  } catch (finishError) {
+    console.error("failed to mark DO run error after enqueue failure", {
+      runId,
+      finishErr: finishError,
+    });
   }
 }
 
-async function handleDiscover(
-  env: Env,
-  msg: Extract<CrawlMessage, { type: "discover" }>
-): Promise<void> {
+async function seedFrontier(input: {
+  stub: DurableObjectStub;
+  message: DiscoverMessage;
+  origin: string;
+  useSitemap: boolean;
+  entries: { url: string }[];
+}): Promise<SeedResponse> {
+  const candidates = input.useSitemap
+    ? input.entries.map((entry) => entry.url)
+    : [`${input.origin}/`];
+  return await doCall<SeedResponse>(input.stub, "/seed", {
+    runId: input.message.runId,
+    urls: candidates,
+    baseUrl: input.origin,
+    depth: 0,
+  } satisfies SeedRequest);
+}
+
+async function enqueueSeededPages(input: {
+  db: Database;
+  env: Environment;
+  stub: DurableObjectStub;
+  message: DiscoverMessage;
+  accepted: AcceptedUrl[];
+}): Promise<void> {
+  try {
+    await enqueuePages(input.env, input.message.runId, input.message.siteId, input.accepted);
+  } catch (error) {
+    await failRunAfterEnqueueFailure({
+      db: input.db,
+      stub: input.stub,
+      runId: input.message.runId,
+      context: "seed pages",
+      error,
+    });
+  }
+}
+
+async function handleDiscover(env: Environment, message: DiscoverMessage): Promise<void> {
   const db = drizzle(env.DB);
   const now = Math.floor(Date.now() / 1000);
-  const origin = msg.url;
+  const origin = message.url;
 
   const robots = await fetchRobots(origin);
   const sitemap = await discoverSitemapEntries(origin, robots.sitemaps);
@@ -172,259 +147,134 @@ async function handleDiscover(
   const useSitemap = entries.length >= MIN_SITEMAP_URLS;
   const discoveryMethod = useSitemap ? "sitemap" : "links";
 
-  const stub = coordinator(env, msg.siteId);
-  const claim = await stub.fetch("https://do/claim", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({
-      runId: msg.runId,
-      origin,
-      disallow: robots.disallow,
-      discoveryMethod,
-      followLinks: !useSitemap
-    } satisfies ClaimRequest)
+  const stub = coordinator(env, message.siteId);
+  const claimed = await claimDiscovery({
+    db,
+    stub,
+    message,
+    now,
+    origin,
+    disallow: robots.disallow,
+    discoveryMethod,
+    useSitemap,
   });
-  if (claim.status === 409) {
-    await db
-      .update(crawlRuns)
-      .set({ status: "error", error: "another run is in progress for this site", finishedAt: now })
-      .where(eq(crawlRuns.id, msg.runId));
-    return;
-  }
-  if (!claim.ok) throw new Error(`DO claim → ${claim.status}`);
+  if (!claimed) return;
 
-  const candidates = useSitemap ? entries.map((e) => e.url) : [`${origin}/`];
-  const seeded = await doCall<SeedResponse>(stub, "/seed", {
-    runId: msg.runId,
-    urls: candidates,
-    baseUrl: origin,
-    depth: 0
-  } satisfies SeedRequest);
+  const seeded = await seedFrontier({ stub, message, origin, useSitemap, entries });
 
   // Persist sitemap lastmod per page now — it's the cheapest monitoring signal
   // later, and the page consumer doesn't see sitemap data.
   if (useSitemap) {
-    const lastmodByUrl = new Map(entries.map((e) => [e.url, e.lastmod ?? null]));
-    const statements = seeded.accepted
-      .filter(({ url }) => lastmodByUrl.get(url) !== undefined)
-      .map(({ url }) =>
-        db
-          .insert(pages)
-          .values({
-            id: nanoid(12),
-            siteId: msg.siteId,
-            url,
-            sitemapLastmod: lastmodByUrl.get(url) ?? null,
-            status: "active",
-            lastSeenAt: now
-          })
-          .onConflictDoUpdate({
-            target: [pages.siteId, pages.url],
-            set: { sitemapLastmod: lastmodByUrl.get(url) ?? null, status: "active" }
-          })
-      );
-    for (let i = 0; i < statements.length; i += 20) {
-      const chunk = statements.slice(i, i + 20);
-      await db.batch([chunk[0]!, ...chunk.slice(1)]);
-    }
+    await persistSitemapPages({
+      db,
+      siteId: message.siteId,
+      entries,
+      accepted: seeded.accepted,
+      now,
+    });
   }
 
-  await db
-    .update(crawlRuns)
-    .set({
-      status: "crawling",
-      discoveryMethod,
-      pagesFound: seeded.accepted.length,
-      startedAt: now
-    })
-    .where(eq(crawlRuns.id, msg.runId));
+  await markRunCrawling({ db, message, discoveryMethod, accepted: seeded.accepted, now });
 
   // Set the adaptive-cadence prior only on a site's first crawl. Monitor and
   // manual re-crawls must not clobber an interval the feedback loop has tuned.
-  const run = await db
-    .select({ trigger: crawlRuns.trigger })
-    .from(crawlRuns)
-    .where(eq(crawlRuns.id, msg.runId))
-    .get();
-  await applyCadencePrior(db, msg.siteId, run?.trigger, {
-    urls: seeded.accepted.map((p) => p.url),
-    pageCount: seeded.accepted.length,
-    isNewsSitemap: useSitemap && sitemap.isNews
+  await applyDiscoveryCadence({
+    db,
+    message,
+    accepted: seeded.accepted,
+    isNewsSitemap: useSitemap && sitemap.isNews,
   });
 
   if (seeded.accepted.length === 0) {
-    await db
-      .update(crawlRuns)
-      .set({ status: "error", error: "no crawlable pages found", finishedAt: now })
-      .where(eq(crawlRuns.id, msg.runId));
-    await doCall(stub, "/finish", { runId: msg.runId, phase: "error" });
+    await finishEmptyRun(db, stub, message.runId, now);
     return;
   }
 
-  try {
-    await enqueuePages(env, msg.runId, msg.siteId, seeded.accepted);
-  } catch (err) {
-    await failRunAfterEnqueueFailure(db, stub, msg.runId, "seed pages", err);
-    return;
-  }
+  await enqueueSeededPages({ db, env, stub, message, accepted: seeded.accepted });
 }
 
-async function handlePage(env: Env, msg: Extract<CrawlMessage, { type: "page" }>): Promise<void> {
+async function handlePage(env: Environment, message: PageMessage): Promise<void> {
   const db = drizzle(env.DB);
   const now = Math.floor(Date.now() / 1000);
-  const stub = coordinator(env, msg.siteId);
-
-  const existing = await db
-    .select()
-    .from(pages)
-    .where(and(eq(pages.siteId, msg.siteId), eq(pages.url, msg.url)))
-    .get();
-
-  const markError = () =>
-    db
-      .insert(pages)
-      .values({
-        id: existing?.id ?? nanoid(12),
-        siteId: msg.siteId,
-        url: msg.url,
-        status: "error",
-        lastSeenAt: now
-      })
-      .onConflictDoUpdate({
-        target: [pages.siteId, pages.url],
-        set: { status: "error", lastSeenAt: now }
-      });
-
-  let links: string[] | undefined;
-  try {
-    const res = await politeFetch(msg.url, {
-      etag: existing?.etag ?? undefined,
-      lastModified: existing?.lastModified ?? undefined
-    });
-
-    if (res.status === 304) {
-      await db
-        .update(pages)
-        .set({ status: "active", lastSeenAt: now })
-        .where(and(eq(pages.siteId, msg.siteId), eq(pages.url, msg.url)));
-    } else if (res.status === 200 && res.body && isHtml(res.contentType)) {
-      const page = await extract(res.body);
-      links = page.links;
-      const path = new URL(msg.url).pathname;
-      const { section } = classify(path);
-      await db
-        .insert(pages)
-        .values({
-          id: existing?.id ?? nanoid(12),
-          siteId: msg.siteId,
-          url: msg.url,
-          title: page.title,
-          description: page.description,
-          h1: page.h1,
-          snippet: page.snippet,
-          sectionHint: section,
-          contentHash: page.contentHash,
-          etag: res.etag,
-          lastModified: res.lastModified,
-          status: "active",
-          lastSeenAt: now
-        })
-        .onConflictDoUpdate({
-          target: [pages.siteId, pages.url],
-          set: {
-            title: page.title,
-            description: page.description,
-            h1: page.h1,
-            snippet: page.snippet,
-            sectionHint: section,
-            contentHash: page.contentHash,
-            etag: res.etag,
-            lastModified: res.lastModified,
-            status: "active",
-            lastSeenAt: now
-          }
-        });
-    } else {
-      await markError();
-    }
-  } catch {
-    // Fetch/extract failure for one page must not fail the run.
-    await markError();
-  }
+  const stub = coordinator(env, message.siteId);
+  const links = await fetchAndPersistPage({ db, message, now });
 
   const completion = await doCall<CompleteResponse>(stub, "/complete", {
-    runId: msg.runId,
-    url: msg.url,
+    runId: message.runId,
+    url: message.url,
     links,
-    depth: msg.depth
+    depth: message.depth,
   } satisfies CompleteRequest);
 
   try {
-    await enqueuePages(env, msg.runId, msg.siteId, completion.accepted);
-  } catch (err) {
-    await failRunAfterEnqueueFailure(db, stub, msg.runId, "discovered pages", err);
+    await enqueuePages(env, message.runId, message.siteId, completion.accepted);
+  } catch (error) {
+    await failRunAfterEnqueueFailure({
+      db,
+      stub,
+      runId: message.runId,
+      context: "discovered pages",
+      error,
+    });
     return;
   }
 
   if (completion.drained) {
-    await db
-      .update(crawlRuns)
-      .set({
-        status: "generating",
-        pagesFound: completion.pagesFound,
-        pagesCrawled: completion.pagesCrawled,
-        ...(completion.capped ? { capReason: "max_pages" } : {})
-      })
-      .where(eq(crawlRuns.id, msg.runId));
-    await env.CRAWL_QUEUE.send({ type: "generate", runId: msg.runId, siteId: msg.siteId });
+    await enqueueGeneratedRun({ db, env, message, completion });
   }
 }
 
 async function handleGenerate(
-  env: Env,
-  msg: Extract<CrawlMessage, { type: "generate" }>
+  env: Environment,
+  message: Extract<CrawlMessage, { type: "generate" }>,
 ): Promise<void> {
   const db = drizzle(env.DB);
-  const stub = coordinator(env, msg.siteId);
+  const stub = coordinator(env, message.siteId);
   try {
-    const run = await db.select().from(crawlRuns).where(eq(crawlRuns.id, msg.runId)).get();
-    await generate(env, msg.siteId, msg.runId, run?.changeSummary ?? undefined);
-    await doCall(stub, "/finish", { runId: msg.runId, phase: "done" });
+    const run = await db.select().from(crawlRuns).where(eq(crawlRuns.id, message.runId)).get();
+    await generate(env, message.siteId, message.runId, run?.changeSummary ?? undefined);
+    await doCall(stub, "/finish", { runId: message.runId, phase: "done" });
   } catch (err) {
     await db
       .update(crawlRuns)
       .set({
         status: "error",
         error: err instanceof Error ? err.message : "generation failed",
-        finishedAt: Math.floor(Date.now() / 1000)
+        finishedAt: Math.floor(Date.now() / 1000),
       })
-      .where(eq(crawlRuns.id, msg.runId));
-    await doCall(stub, "/finish", { runId: msg.runId, phase: "error" });
+      .where(eq(crawlRuns.id, message.runId));
+    await doCall(stub, "/finish", { runId: message.runId, phase: "error" });
   }
 }
 
+/**
+ * Process queued crawl messages and acknowledge or retry each one.
+ * @param batch Queue batch delivered by Cloudflare.
+ * @param env Worker bindings used by crawl handlers.
+ * @param _ctx Worker execution context, currently unused.
+ */
 export async function handleCrawlBatch(
   batch: MessageBatch<CrawlMessage>,
-  env: Env,
-  _ctx: ExecutionContext
+  env: Environment,
+  _ctx: ExecutionContext,
 ): Promise<void> {
-  for (const msg of batch.messages) {
+  for (const message of batch.messages) {
     try {
-      switch (msg.body.type) {
+      switch (message.body.type) {
         case "discover":
-          await handleDiscover(env, msg.body);
+          await handleDiscover(env, message.body);
           break;
         case "page":
-          await handlePage(env, msg.body);
+          await handlePage(env, message.body);
           break;
         case "generate":
-          await handleGenerate(env, msg.body);
+          await handleGenerate(env, message.body);
           break;
       }
-      msg.ack();
+      message.ack();
     } catch (err) {
-      console.error("crawl handler failed", msg.body, err);
-      msg.retry();
+      console.error("crawl handler failed", message.body, err);
+      message.retry();
     }
   }
 }

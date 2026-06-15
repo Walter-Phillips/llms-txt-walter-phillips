@@ -6,19 +6,19 @@ import "./globals.css";
 const display = Newsreader({
   subsets: ["latin"],
   style: ["normal", "italic"],
-  variable: "--font-display"
+  variable: "--font-display",
 });
 
 const mono = IBM_Plex_Mono({
   subsets: ["latin"],
   weight: ["400", "500", "600"],
-  variable: "--font-mono"
+  variable: "--font-mono",
 });
 
 export const metadata: Metadata = {
   title: "llms.txt press — generate llms.txt for any site",
   description:
-    "Paste a URL, get a spec-compliant llms.txt: a plain-text map of your site for language models. Hosted, versioned, and kept up to date."
+    "Paste a URL, get a spec-compliant llms.txt: a plain-text map of your site for language models. Hosted, versioned, and kept up to date.",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

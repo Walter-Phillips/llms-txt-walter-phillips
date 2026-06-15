@@ -155,7 +155,7 @@ const METHODS = [
   "getPages",
   "getDiff",
   "setMonitoring",
-  "getLlmsTxt"
+  "getLlmsTxt",
 ] as const;
 
 it("mock client implements every LlmsApi method", () => {

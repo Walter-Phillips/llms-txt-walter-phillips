@@ -7,11 +7,11 @@ const config: Config = {
       colors: {
         paper: {
           DEFAULT: "hsl(var(--paper))",
-          deep: "hsl(var(--paper-deep))"
+          deep: "hsl(var(--paper-deep))",
         },
         ink: {
           DEFAULT: "hsl(var(--ink))",
-          soft: "hsl(var(--ink-soft))"
+          soft: "hsl(var(--ink-soft))",
         },
         rule: "hsl(var(--rule))",
         accent: "hsl(var(--accent))",
@@ -21,16 +21,16 @@ const config: Config = {
         foreground: "hsl(var(--foreground))",
         primary: {
           DEFAULT: "hsl(var(--primary))",
-          foreground: "hsl(var(--primary-foreground))"
-        }
+          foreground: "hsl(var(--primary-foreground))",
+        },
       },
       fontFamily: {
         display: ["var(--font-display)", "Georgia", "serif"],
-        mono: ["var(--font-mono)", "ui-monospace", "Menlo", "monospace"]
-      }
-    }
+        mono: ["var(--font-mono)", "ui-monospace", "Menlo", "monospace"],
+      },
+    },
   },
-  plugins: []
+  plugins: [],
 };
 
 export default config;

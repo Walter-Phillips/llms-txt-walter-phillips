@@ -10,8 +10,8 @@ export default tseslint.config(
       "node_modules/**",
       ".wrangler/**",
       ".next/**",
-      "*.config.*"
-    ]
+      "*.config.*",
+    ],
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,
@@ -20,12 +20,12 @@ export default tseslint.config(
     rules: {
       "@typescript-eslint/consistent-type-imports": [
         "warn",
-        { prefer: "type-imports", fixStyle: "inline-type-imports" }
+        { prefer: "type-imports", fixStyle: "inline-type-imports" },
       ],
       "@typescript-eslint/no-unused-vars": [
         "error",
-        { argsIgnorePattern: "^_", varsIgnorePattern: "^_" }
-      ]
-    }
-  }
+        { argsIgnorePattern: "^_", varsIgnorePattern: "^_" },
+      ],
+    },
+  },
 );

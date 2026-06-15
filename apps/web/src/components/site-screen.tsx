@@ -53,7 +53,7 @@ export function SiteScreen({ siteId, runId }: SiteScreenProps) {
             {(
               [
                 ["file", "File"],
-                ["history", "History"]
+                ["history", "History"],
               ] as const
             ).map(([key, label]) => (
               <button

@@ -1,25 +1,26 @@
 import { crawlRuns, fileVersions, pages, sites } from "@profound-takehome/db";
 import { vi } from "vitest";
-import type { Env } from "./bindings";
+import type { Environment } from "./bindings";
 
 type Table = typeof sites | typeof crawlRuns | typeof pages | typeof fileVersions;
 
-type SelectResponse = unknown | unknown[];
+type SelectRow = object;
+type SelectResponse = SelectRow | SelectRow[] | undefined;
 
-type QueuedSelect = {
+interface QueuedSelect {
   table: Table;
   result: SelectResponse;
-};
+}
 
-export type InsertRecord = {
+export interface InsertRecord {
   table: string;
   values: Record<string, unknown>;
-};
+}
 
-export type UpdateRecord = {
+export interface UpdateRecord {
   table: string;
   values: Record<string, unknown>;
-};
+}
 
 function tableName(table: Table): string {
   if (table === sites) return "sites";
@@ -29,56 +30,77 @@ function tableName(table: Table): string {
   return "unknown";
 }
 
+function isSelectRows(result: SelectResponse): result is SelectRow[] {
+  return Array.isArray(result);
+}
+
 class FakeSelect {
   private table: Table | null = null;
 
-  constructor(private readonly db: FakeDb) {}
+  constructor(private readonly db: FakeDatabase) {}
 
-  from(table: Table) {
+  from(table: Table): this {
     this.table = table;
     return this;
   }
 
-  where() {
+  where(): this {
     return this;
   }
 
-  orderBy() {
+  orderBy(): this {
     return this;
   }
 
-  limit() {
+  limit(): this {
     return this;
   }
 
-  async get() {
+  get(): Promise<SelectRow | undefined> {
     const result = this.db.takeSelect(this.table);
-    return Array.isArray(result) ? (result[0] ?? undefined) : result;
+    return Promise.resolve(isSelectRows(result) ? (result[0] ?? undefined) : result);
   }
 
-  async all() {
+  all(): Promise<SelectRow[]> {
     const result = this.db.takeSelect(this.table);
-    return Array.isArray(result) ? result : result == null ? [] : [result];
+    if (result === undefined) return Promise.resolve([]);
+    return Promise.resolve(isSelectRows(result) ? result : [result]);
   }
 
-  then<TResult1 = unknown[], TResult2 = never>(
-    onfulfilled?: ((value: unknown[]) => TResult1 | PromiseLike<TResult1>) | null,
-    onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null
-  ) {
+  then<TResult1 = SelectRow[], TResult2 = never>(
+    onfulfilled?: ((value: SelectRow[]) => TResult1 | PromiseLike<TResult1>) | null,
+    onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null,
+  ): Promise<TResult1 | TResult2> {
     return this.all().then(onfulfilled, onrejected);
   }
 }
 
-export class FakeDb {
+/**
+ * Minimal in-memory Drizzle stand-in for route tests.
+ */
+export class FakeDatabase {
   readonly inserts: InsertRecord[] = [];
   readonly updates: UpdateRecord[] = [];
   private readonly selects: QueuedSelect[] = [];
 
-  queueSelect(table: Table, result: SelectResponse) {
+  /**
+   * Queues a select result for a specific table.
+   *
+   * @param table Table expected by the next select.
+   * @param result Row, row list, or missing result to return.
+   */
+  queueSelect(table: Table, result: SelectResponse): void {
     this.selects.push({ table, result });
   }
 
-  takeSelect(table: Table | null) {
+  /**
+   * Removes the next queued select result.
+   *
+   * @param table Table requested by the fake query.
+   * @returns Queued select result.
+   * @throws When the query table does not match the queued result.
+   */
+  takeSelect(table: Table | null): SelectResponse {
     if (!table) throw new Error("fake db select used before from()");
     const next = this.selects.shift();
     if (!next) throw new Error(`fake db missing queued select for ${tableName(table)}`);
@@ -88,53 +110,100 @@ export class FakeDb {
     return next.result;
   }
 
-  select() {
+  /**
+   * Starts a fake select builder.
+   *
+   * @returns Chainable fake select builder.
+   */
+  select(): FakeSelect {
     return new FakeSelect(this);
   }
 
-  insert(table: Table) {
+  /**
+   * Records an insert into a fake table.
+   *
+   * @param table Table being inserted into.
+   * @returns Fake insert builder.
+   */
+  insert(table: Table): { values: (values: Record<string, unknown>) => Promise<void> } {
     return {
-      values: async (values: Record<string, unknown>) => {
+      values: (values: Record<string, unknown>): Promise<void> => {
         this.inserts.push({ table: tableName(table), values });
-      }
+        return Promise.resolve();
+      },
     };
   }
 
-  update(table: Table) {
+  /**
+   * Records an update against a fake table.
+   *
+   * @param table Table being updated.
+   * @returns Fake update builder.
+   */
+  update(table: Table): {
+    set: (values: Record<string, unknown>) => { where: () => Promise<undefined> };
+  } {
     return {
       set: (values: Record<string, unknown>) => {
         this.updates.push({ table: tableName(table), values });
-        return { where: async () => undefined };
-      }
+        return { where: () => Promise.resolve(undefined) };
+      },
     };
   }
 }
 
-export function createTestEnv(db: FakeDb, overrides: Partial<Env> = {}): Env {
+/**
+ * Creates a Cloudflare environment for API route tests.
+ *
+ * @param db Fake database to expose as the D1 binding.
+ * @param overrides Binding overrides for a specific test.
+ * @returns Test environment bindings.
+ */
+export function createTestEnvironment(
+  db: FakeDatabase,
+  overrides: Partial<Environment> = {},
+): Environment {
   return {
     DB: db as unknown as D1Database,
-    FILES: { put: vi.fn(async () => undefined) } as unknown as R2Bucket,
+    FILES: { put: vi.fn(() => Promise.resolve(undefined)) } as unknown as R2Bucket,
     RATE_LIMIT: {} as KVNamespace,
-    CRAWL_QUEUE: { send: vi.fn(async () => undefined) } as unknown as Env["CRAWL_QUEUE"],
-    MONITOR_QUEUE: { send: vi.fn(async () => undefined) } as unknown as Env["MONITOR_QUEUE"],
+    CRAWL_QUEUE: {
+      send: vi.fn(() => Promise.resolve(undefined)),
+    } as unknown as Environment["CRAWL_QUEUE"],
+    MONITOR_QUEUE: {
+      send: vi.fn(() => Promise.resolve(undefined)),
+    } as unknown as Environment["MONITOR_QUEUE"],
     SITE_COORDINATOR: {
       idFromName: vi.fn((name: string) => name),
       get: vi.fn(() => ({
-        fetch: vi.fn(async () => Response.json({}))
-      }))
+        fetch: vi.fn(() => Promise.resolve(Response.json({}))),
+      })),
     } as unknown as DurableObjectNamespace,
     ANTHROPIC_API_KEY: "test-key",
     APP_ORIGIN: "https://app.example.com",
-    ...overrides
+    ...overrides,
   };
 }
 
-export function createSiteCoordinator(live: unknown) {
-  const fetch = vi.fn(async () => Response.json(live));
+/**
+ * Creates a Durable Object namespace that returns fixed live state.
+ *
+ * @param live JSON state returned by the fake Durable Object.
+ * @returns Namespace plus fetch spy for assertions.
+ */
+export function createSiteCoordinator(live: unknown): {
+  namespace: DurableObjectNamespace;
+  fetch: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
+} {
+  const fetch = vi.fn((_input: RequestInfo | URL, _init?: RequestInit) =>
+    Promise.resolve(Response.json(live)),
+  );
   const stub = { fetch };
   const namespace = {
     idFromName: vi.fn((name: string) => name),
-    get: vi.fn(() => stub)
+    get: vi.fn(() => stub),
   };
   return { namespace: namespace as unknown as DurableObjectNamespace, fetch };
 }
+
+export { createTestEnvironment as createTestEnv, FakeDatabase as FakeDb };

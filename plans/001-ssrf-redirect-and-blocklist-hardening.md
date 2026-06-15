@@ -74,7 +74,7 @@ at every fetch hop.
   const res = await fetch(url, {
     headers,
     redirect: "follow",
-    signal: AbortSignal.timeout(TIMEOUT_MS)
+    signal: AbortSignal.timeout(TIMEOUT_MS),
   });
   ```
 
@@ -223,7 +223,7 @@ import { isBlockedHost } from "../lib/url";
 const res = await fetch(url, {
   headers,
   redirect: "follow",
-  signal: AbortSignal.timeout(TIMEOUT_MS)
+  signal: AbortSignal.timeout(TIMEOUT_MS),
 });
 
 // A page may redirect to internal space; re-check the host we actually landed on.

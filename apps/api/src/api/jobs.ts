@@ -2,9 +2,14 @@ import { Hono } from "hono";
 import { drizzle } from "drizzle-orm/d1";
 import { eq } from "drizzle-orm";
 import { crawlRuns } from "@profound-takehome/db";
-import type { Env } from "../bindings";
+import type { Environment } from "../bindings";
 
-export const jobsRouter = new Hono<{ Bindings: Env }>();
+export const jobsRouter = new Hono<{ Bindings: Environment }>();
+
+async function responseJson(response: Response): Promise<unknown> {
+  const value: unknown = await response.json();
+  return value;
+}
 
 jobsRouter.get("/:runId", async (c) => {
   const db = drizzle(c.env.DB);
@@ -20,7 +25,8 @@ jobsRouter.get("/:runId", async (c) => {
   if (run.status === "crawling" || run.status === "generating") {
     const id = c.env.SITE_COORDINATOR.idFromName(run.siteId);
     const stub = c.env.SITE_COORDINATOR.get(id);
-    const live = await stub.fetch("https://do/status").then((r) => r.json());
+    const response = await stub.fetch("https://do/status");
+    const live = await responseJson(response);
     return c.json({ run, live });
   }
 

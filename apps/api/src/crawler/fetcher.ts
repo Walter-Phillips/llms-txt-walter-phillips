@@ -5,44 +5,37 @@ const UA = "llms-txt-generator/1.0 (+https://llms-txt.example.com/about)";
 const TIMEOUT_MS = 10_000;
 export const MAX_BODY_BYTES = 2 * 1024 * 1024;
 
-export type FetchResult = {
+export interface FetchResult {
   status: number;
   body: ReadableStream<Uint8Array> | null;
   etag: string | null;
   lastModified: string | null;
   contentType: string | null;
   contentEncoding: string | null;
-};
+}
 
+/**
+ * Fetch a URL with crawler headers, redirect validation, and a body-size cap.
+ *
+ * @param url - URL to fetch.
+ * @param options - Conditional request and body limit options.
+ * @param options.etag - Previous ETag used for `If-None-Match`.
+ * @param options.lastModified - Previous timestamp used for `If-Modified-Since`.
+ * @param options.maxBodyBytes - Maximum allowed response body size in bytes.
+ * @returns Fetch metadata and the readable body when it is safe to consume.
+ */
 export async function politeFetch(
   url: string,
-  opts: { etag?: string; lastModified?: string; maxBodyBytes?: number } = {}
+  options: { etag?: string; lastModified?: string; maxBodyBytes?: number } = {},
 ): Promise<FetchResult> {
-  const headers: Record<string, string> = { "user-agent": UA };
-  if (opts.etag) headers["if-none-match"] = opts.etag;
-  if (opts.lastModified) headers["if-modified-since"] = opts.lastModified;
-
   const res = await fetch(url, {
-    headers,
+    headers: buildHeaders(options),
     redirect: "follow",
-    signal: AbortSignal.timeout(TIMEOUT_MS)
+    signal: AbortSignal.timeout(TIMEOUT_MS),
   });
 
-  if (res.url) {
-    const finalHost = new URL(res.url).hostname;
-    if (isBlockedHost(finalHost)) {
-      await res.body?.cancel();
-      throw new Error(`blocked redirect to internal host: ${finalHost}`);
-    }
-  }
-
-  const declaredLength = Number.parseInt(res.headers.get("content-length") ?? "", 10);
-  const maxBodyBytes = opts.maxBodyBytes ?? MAX_BODY_BYTES;
-  let body = res.body;
-  if (Number.isFinite(declaredLength) && declaredLength > maxBodyBytes) {
-    await res.body?.cancel();
-    body = null;
-  }
+  await rejectBlockedRedirect(res);
+  const body = await bodyWithinLimit(res, options.maxBodyBytes ?? MAX_BODY_BYTES);
 
   return {
     status: res.status,
@@ -50,19 +43,59 @@ export async function politeFetch(
     etag: res.headers.get("etag"),
     lastModified: res.headers.get("last-modified"),
     contentType: res.headers.get("content-type"),
-    contentEncoding: res.headers.get("content-encoding")
+    contentEncoding: res.headers.get("content-encoding"),
   };
 }
 
+function buildHeaders(options: { etag?: string; lastModified?: string }): Record<string, string> {
+  const headers: Record<string, string> = { "user-agent": UA };
+  if (options.etag) headers["if-none-match"] = options.etag;
+  if (options.lastModified) headers["if-modified-since"] = options.lastModified;
+  return headers;
+}
+
+async function rejectBlockedRedirect(response: Response): Promise<void> {
+  if (!response.url) return;
+
+  const finalHost = new URL(response.url).hostname;
+  if (!isBlockedHost(finalHost)) return;
+
+  await response.body?.cancel();
+  throw new Error(`blocked redirect to internal host: ${finalHost}`);
+}
+
+async function bodyWithinLimit(
+  response: Response,
+  maxBodyBytes: number,
+): Promise<ReadableStream<Uint8Array> | null> {
+  const declaredLength = Number.parseInt(response.headers.get("content-length") ?? "", 10);
+  if (!Number.isFinite(declaredLength) || declaredLength <= maxBodyBytes) return response.body;
+
+  await response.body?.cancel();
+  return null;
+}
+
+/**
+ * Determine whether a response content type can be parsed as HTML.
+ *
+ * @param contentType - Response `Content-Type` header value.
+ * @returns Whether the content type is HTML-compatible.
+ */
 export function isHtml(contentType: string | null): boolean {
   if (!contentType) return false;
   return /text\/html|application\/xhtml/i.test(contentType);
 }
 
-/** Read a body stream as text, hard-capped at maxBytes (cancels the rest). */
+/**
+ * Read a body stream as text, hard-capped at maxBytes (cancels the rest).
+ *
+ * @param body - Response body stream to decode.
+ * @param maxBytes - Maximum number of bytes to read before cancellation.
+ * @returns Decoded text from the stream.
+ */
 export async function readBodyText(
   body: ReadableStream<Uint8Array>,
-  maxBytes = MAX_BODY_BYTES
+  maxBytes = MAX_BODY_BYTES,
 ): Promise<string> {
   const reader = body.getReader();
   const decoder = new TextDecoder();

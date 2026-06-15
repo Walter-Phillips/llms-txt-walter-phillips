@@ -3,6 +3,9 @@ const TRACKING_PARAMS = /^(utm_|fbclid$|gclid$|mc_|ref$|ref_|_ga$|session)/i;
 /**
  * Normalize input → canonical origin string, or null if invalid / unsafe.
  * SSRF guard rejects localhost, private IPs, and non-http(s) schemes.
+ *
+ * @param input - User-supplied site URL.
+ * @returns Canonical origin string when the input is safe; otherwise null.
  */
 export function normalizeOrigin(input: string): string | null {
   let parsed: URL;
@@ -17,41 +20,66 @@ export function normalizeOrigin(input: string): string | null {
   return `${parsed.protocol}//${host}`;
 }
 
-/** True if a hostname points at loopback/private/link-local space. */
+/**
+ * True if a hostname points at loopback/private/link-local space.
+ *
+ * @param hostname - Hostname to classify.
+ * @returns Whether the host should be blocked from server-side fetches.
+ */
 export function isBlockedHost(hostname: string): boolean {
-  let host = hostname.toLowerCase();
-  if (host.startsWith("[") && host.endsWith("]")) host = host.slice(1, -1);
+  const host = stripIpv6Brackets(hostname.toLowerCase());
+  const mappedIpv4 = ipv4FromMappedIpv6(host);
 
-  if (host === "localhost" || host.endsWith(".localhost")) return true;
+  return (
+    isLocalhostName(host) ||
+    isBlockedIpv6Host(host) ||
+    (mappedIpv4 === null
+      ? isBlockedIpv4Host(toDottedQuad(host) ?? host)
+      : isBlockedHost(mappedIpv4))
+  );
+}
 
-  if (host === "::1" || host === "::") return true;
-  if (/^fe[89ab][0-9a-f]:/.test(host)) return true;
-  if (/^f[cd][0-9a-f]{2}:/.test(host)) return true;
+function stripIpv6Brackets(host: string): string {
+  return host.startsWith("[") && host.endsWith("]") ? host.slice(1, -1) : host;
+}
 
-  const mapped = host.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/);
-  if (mapped) return isBlockedHost(mapped[1]!);
-  const mappedHex = host.match(/^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/);
-  if (mappedHex) {
-    const hi = Number.parseInt(mappedHex[1]!, 16);
-    const lo = Number.parseInt(mappedHex[2]!, 16);
-    return isBlockedHost(`${(hi >>> 8) & 255}.${hi & 255}.${(lo >>> 8) & 255}.${lo & 255}`);
-  }
+function isLocalhostName(host: string): boolean {
+  return host === "localhost" || host.endsWith(".localhost");
+}
 
-  const dotted = toDottedQuad(host);
-  const ipv4 = dotted ?? host;
-  if (
-    ipv4 === "0.0.0.0" ||
-    /^0\./.test(ipv4) ||
-    /^127\./.test(ipv4) ||
-    /^10\./.test(ipv4) ||
-    /^192\.168\./.test(ipv4) ||
-    /^172\.(1[6-9]|2\d|3[0-1])\./.test(ipv4) ||
-    /^169\.254\./.test(ipv4) ||
-    /^100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\./.test(ipv4)
-  ) {
-    return true;
-  }
-  return false;
+function isBlockedIpv6Host(host: string): boolean {
+  return (
+    host === "::1" ||
+    host === "::" ||
+    /^fe[89ab][0-9a-f]:/.test(host) ||
+    /^f[cd][0-9a-f]{2}:/.test(host)
+  );
+}
+
+function ipv4FromMappedIpv6(host: string): string | null {
+  const mapped = /^::ffff:(\d+\.\d+\.\d+\.\d+)$/.exec(host);
+  if (mapped) return mapped[1];
+
+  const mappedHex = /^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/.exec(host);
+  if (!mappedHex) return null;
+
+  const high = Number.parseInt(mappedHex[1], 16);
+  const low = Number.parseInt(mappedHex[2], 16);
+  return [(high >>> 8) & 255, high & 255, (low >>> 8) & 255, low & 255].join(".");
+}
+
+const BLOCKED_IPV4_PATTERNS = [
+  /^0\./,
+  /^127\./,
+  /^10\./,
+  /^192\.168\./,
+  /^172\.(1[6-9]|2\d|3[0-1])\./,
+  /^169\.254\./,
+  /^100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\./,
+];
+
+function isBlockedIpv4Host(ipv4: string): boolean {
+  return ipv4 === "0.0.0.0" || BLOCKED_IPV4_PATTERNS.some((pattern) => pattern.test(ipv4));
 }
 
 function toDottedQuad(host: string): string | null {
@@ -71,6 +99,13 @@ function toDottedQuad(host: string): string | null {
   return [(value >>> 24) & 255, (value >>> 16) & 255, (value >>> 8) & 255, value & 255].join(".");
 }
 
+/**
+ * Normalize a URL for crawl de-duplication.
+ *
+ * @param input - Absolute or relative URL to normalize.
+ * @param base - Base URL used to resolve relative input.
+ * @returns Canonical URL string, or null when parsing fails.
+ */
 export function normalizeUrl(input: string, base?: string): string | null {
   let parsed: URL;
   try {
@@ -94,6 +129,9 @@ export function normalizeUrl(input: string, base?: string): string | null {
 
 /**
  * Number of non-empty path segments in a URL. Unparseable URLs sort last.
+ *
+ * @param url - URL whose path should be measured.
+ * @returns Path depth, or a large sentinel for invalid URLs.
  */
 export function urlPathDepth(url: string): number {
   try {

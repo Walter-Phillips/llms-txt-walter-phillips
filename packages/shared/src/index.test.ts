@@ -22,8 +22,8 @@ describe("runSchema", () => {
         capReason: "max_pages",
         error: null,
         startedAt: 1,
-        finishedAt: 2
-      }).capReason
+        finishedAt: 2,
+      }).capReason,
     ).toBe("max_pages");
   });
 });
@@ -39,8 +39,8 @@ describe("fileVersionSchema", () => {
         r2Key: "site_1/v1.txt",
         changeSummary: null,
         generatedBy: "llm-refined",
-        createdAt: 1
-      }).generatedBy
+        createdAt: 1,
+      }).generatedBy,
     ).toBe("llm-refined");
   });
 });

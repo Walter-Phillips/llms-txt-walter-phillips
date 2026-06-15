@@ -5,12 +5,12 @@ import { defineConfig } from "vitest/config";
 export default defineConfig({
   plugins: [react()],
   resolve: {
-    alias: { "@": path.resolve(__dirname, "src") }
+    alias: { "@": path.resolve(__dirname, "src") },
   },
   test: {
     environment: "jsdom",
     globals: true,
     setupFiles: ["./vitest.setup.ts"],
-    include: ["src/**/*.test.{ts,tsx}"]
-  }
+    include: ["src/**/*.test.{ts,tsx}"],
+  },
 });

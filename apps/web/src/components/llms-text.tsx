@@ -15,7 +15,7 @@ function renderInline(line: string, key: number) {
       <span key={`${key}-${match.index}`}>
         [<span className="text-accent">{match[1]}</span>](
         <span className="text-ink-soft">{match[2]}</span>)
-      </span>
+      </span>,
     );
     last = match.index + match[0].length;
   }

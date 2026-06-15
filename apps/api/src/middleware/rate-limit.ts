@@ -1,16 +1,24 @@
 import type { MiddlewareHandler } from "hono";
-import type { Env } from "../bindings";
+import type { Environment } from "../bindings";
 
-export type RateLimitResult = {
+export interface RateLimitResult {
   allowed: boolean;
   remaining: number;
-};
+}
 
+/**
+ * Checks and increments a KV-backed fixed-window rate limit counter.
+ * @param kv KV namespace that stores counters.
+ * @param key Rate limit counter key.
+ * @param limit Maximum allowed requests in the window.
+ * @param windowS Window length in seconds.
+ * @returns Whether the request is allowed and how many requests remain.
+ */
 export async function checkRateLimit(
   kv: KVNamespace,
   key: string,
   limit: number,
-  windowS: number
+  windowS: number,
 ): Promise<RateLimitResult> {
   try {
     const raw = await kv.get(key);
@@ -26,21 +34,29 @@ export async function checkRateLimit(
   }
 }
 
-export function rateLimit(opts: {
+/**
+ * Creates middleware that rate-limits mutating API requests.
+ * @param options Rate limit settings.
+ * @param options.limit Maximum allowed requests in the window.
+ * @param options.windowS Window length in seconds.
+ * @param options.routeClass Stable route bucket used in the KV counter key.
+ * @returns Hono middleware for write endpoints.
+ */
+export function rateLimit(options: {
   limit: number;
   windowS: number;
   routeClass: string;
-}): MiddlewareHandler<{ Bindings: Env }> {
+}): MiddlewareHandler<{ Bindings: Environment }> {
   return async (c, next) => {
     if (c.env.RATE_LIMIT_ENABLED !== "1") return next();
     if (c.req.method !== "POST" && c.req.method !== "PATCH") return next();
 
     const ip = c.req.header("cf-connecting-ip") ?? "unknown";
-    const window = Math.floor(Date.now() / 1000 / opts.windowS);
-    const key = `rl:${opts.routeClass}:${ip}:${window}`;
-    const result = await checkRateLimit(c.env.RATE_LIMIT, key, opts.limit, opts.windowS);
+    const window = Math.floor(Date.now() / 1000 / options.windowS);
+    const key = `rl:${options.routeClass}:${ip}:${String(window)}`;
+    const result = await checkRateLimit(c.env.RATE_LIMIT, key, options.limit, options.windowS);
     if (!result.allowed) {
-      c.header("Retry-After", String(opts.windowS));
+      c.header("Retry-After", String(options.windowS));
       return c.json({ error: "rate_limited" }, 429);
     }
     c.header("X-RateLimit-Remaining", String(result.remaining));

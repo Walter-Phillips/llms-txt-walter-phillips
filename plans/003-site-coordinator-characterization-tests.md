@@ -132,7 +132,7 @@ function fakeStorage() {
   const map = new Map<string, unknown>();
   return {
     get: async (k: string) => map.get(k),
-    put: async (k: string, v: unknown) => void map.set(k, v)
+    put: async (k: string, v: unknown) => void map.set(k, v),
   };
 }
 // Minimal DurableObjectState stand-in: only .storage is used by the class.

@@ -4,11 +4,11 @@ import { nanoid } from "nanoid";
 import { drizzle } from "drizzle-orm/d1";
 import { desc, eq } from "drizzle-orm";
 import { sites, crawlRuns, pages, fileVersions } from "@profound-takehome/db";
-import type { Env } from "../bindings";
+import type { Environment } from "../bindings";
 import { normalizeOrigin } from "../lib/url";
 import { computeDiff, listVersions } from "./files";
 
-export const sitesRouter = new Hono<{ Bindings: Env }>();
+export const sitesRouter = new Hono<{ Bindings: Environment }>();
 
 const createBody = z.object({ url: z.string().url() });
 
@@ -32,7 +32,7 @@ sitesRouter.post("/", async (c) => {
       monitoring: 0,
       checkIntervalS: 86400,
       changeStreak: 0,
-      createdAt: now
+      createdAt: now,
     });
   }
 
@@ -42,7 +42,7 @@ sitesRouter.post("/", async (c) => {
     siteId,
     trigger: existing ? "manual" : "initial",
     status: "queued",
-    startedAt: now
+    startedAt: now,
   });
 
   await c.env.CRAWL_QUEUE.send({ type: "discover", runId, siteId, url: origin });
@@ -86,7 +86,7 @@ sitesRouter.patch("/:id/monitoring", async (c) => {
     .set({
       monitoring: body.data.enabled ? 1 : 0,
       // First check after the current interval; the cadence loop adapts from there.
-      nextCheckAt: body.data.enabled ? now + site.checkIntervalS : null
+      nextCheckAt: body.data.enabled ? now + site.checkIntervalS : null,
     })
     .where(eq(sites.id, site.id));
 
@@ -119,7 +119,7 @@ sitesRouter.get("/:id/pages", async (c) => {
       title: pages.title,
       description: pages.description,
       sectionHint: pages.sectionHint,
-      status: pages.status
+      status: pages.status,
     })
     .from(pages)
     .where(eq(pages.siteId, site.id))
@@ -142,5 +142,5 @@ sitesRouter.get("/:id/diff", async (c) => {
     .get();
   if (!site) return c.json({ error: "not_found" }, 404);
 
-  return computeDiff(c, db, site, from, to);
+  return computeDiff(c, db, site, { from, to });
 });

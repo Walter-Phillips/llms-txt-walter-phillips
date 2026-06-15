@@ -1,24 +1,25 @@
 import { Hono } from "hono";
 import { describe, expect, it } from "vitest";
-import type { Env } from "../bindings";
+import { createTestEnv as createTestEnvironment, FakeDb as FakeDatabase } from "../test-helpers";
+import type { Environment } from "../bindings";
 import { checkRateLimit, rateLimit } from "./rate-limit";
 
-function fakeKv(opts: { throws?: boolean } = {}): KVNamespace {
+function fakeKv(options: { throws?: boolean } = {}): KVNamespace {
   const map = new Map<string, string>();
   return {
-    get: async (key: string) => {
-      if (opts.throws) throw new Error("kv unavailable");
+    get: (key: string) => {
+      if (options.throws) throw new Error("kv unavailable");
       return map.get(key) ?? null;
     },
-    put: async (key: string, value: string) => {
-      if (opts.throws) throw new Error("kv unavailable");
+    put: (key: string, value: string) => {
+      if (options.throws) throw new Error("kv unavailable");
       map.set(key, value);
-    }
+    },
   } as unknown as KVNamespace;
 }
 
-function env(kv = fakeKv(), enabled = "1"): Env {
-  return { RATE_LIMIT: kv, RATE_LIMIT_ENABLED: enabled } as unknown as Env;
+function env(kv = fakeKv(), enabled = "1"): Environment {
+  return createTestEnvironment(new FakeDatabase(), { RATE_LIMIT: kv, RATE_LIMIT_ENABLED: enabled });
 }
 
 describe("checkRateLimit", () => {
@@ -39,14 +40,14 @@ describe("checkRateLimit", () => {
   it("fails open when KV throws", async () => {
     await expect(checkRateLimit(fakeKv({ throws: true }), "k", 1, 60)).resolves.toEqual({
       allowed: true,
-      remaining: 1
+      remaining: 1,
     });
   });
 });
 
 describe("rateLimit", () => {
   it("returns 429 with Retry-After when enabled and over limit", async () => {
-    const app = new Hono<{ Bindings: Env }>();
+    const app = new Hono<{ Bindings: Environment }>();
     const bindings = env();
     app.use(rateLimit({ limit: 1, windowS: 60, routeClass: "write" }));
     app.post("/", (c) => c.json({ ok: true }));
@@ -61,7 +62,7 @@ describe("rateLimit", () => {
   });
 
   it("is inert when the flag is disabled", async () => {
-    const app = new Hono<{ Bindings: Env }>();
+    const app = new Hono<{ Bindings: Environment }>();
     app.use(rateLimit({ limit: 0, windowS: 60, routeClass: "write" }));
     app.post("/", (c) => c.json({ ok: true }));
 

@@ -6,7 +6,7 @@ import {
   rankPages,
   resolveSiteName,
   stripTitleSuffix,
-  type PageRow
+  type PageRow,
 } from "./heuristics";
 
 const ORIGIN = "https://example.com";
@@ -18,7 +18,7 @@ function row(partial: Partial<PageRow> & { url: string }): PageRow {
     h1: null,
     snippet: null,
     sectionHint: null,
-    ...partial
+    ...partial,
   };
 }
 
@@ -90,7 +90,7 @@ describe("buildInventory", () => {
       row({ url: `${ORIGIN}/`, title: "Acme | Widgets", description: "Acme makes widgets." }),
       row({ url: `${ORIGIN}/docs`, title: "Docs", description: "Documentation home." }),
       row({ url: `${ORIGIN}/pricing`, title: "Pricing" }),
-      row({ url: `${ORIGIN}/privacy`, title: "Privacy Policy" })
+      row({ url: `${ORIGIN}/privacy`, title: "Privacy Policy" }),
     ];
     const inv = buildInventory(rows, ORIGIN);
 
@@ -109,7 +109,7 @@ describe("buildInventory", () => {
   it("orders sections deterministically (Documentation before Blog)", () => {
     const rows = [
       row({ url: `${ORIGIN}/blog/post`, title: "Post" }),
-      row({ url: `${ORIGIN}/docs/start`, title: "Start" })
+      row({ url: `${ORIGIN}/docs/start`, title: "Start" }),
     ];
     const inv = buildInventory(rows, ORIGIN);
     expect(inv.sections.map((s) => s.name)).toEqual(["Documentation", "Blog"]);
@@ -117,17 +117,21 @@ describe("buildInventory", () => {
 
   it("caps sections and demotes overflow to Optional", () => {
     const rows = Array.from({ length: MAX_LINKS_PER_SECTION + 3 }, (_, i) =>
-      row({ url: `${ORIGIN}/docs/page-${i}`, title: `Page ${i}`, description: `Desc ${i}` })
+      row({
+        url: `${ORIGIN}/docs/page-${String(i)}`,
+        title: `Page ${String(i)}`,
+        description: `Desc ${String(i)}`,
+      }),
     );
     const inv = buildInventory(rows, ORIGIN);
-    const docs = inv.sections.find((s) => s.name === "Documentation")!;
-    expect(docs.pages).toHaveLength(MAX_LINKS_PER_SECTION);
+    const documentation = inv.sections.find((s) => s.name === "Documentation");
+    expect(documentation?.pages).toHaveLength(MAX_LINKS_PER_SECTION);
     expect(inv.optional).toHaveLength(3);
   });
 
   it("uses snippet as description fallback", () => {
     const rows = [row({ url: `${ORIGIN}/docs`, title: "Docs", snippet: "From the page body." })];
     const inv = buildInventory(rows, ORIGIN);
-    expect(inv.sections[0]!.pages[0]!.description).toBe("From the page body.");
+    expect(inv.sections[0].pages[0].description).toBe("From the page body.");
   });
 });

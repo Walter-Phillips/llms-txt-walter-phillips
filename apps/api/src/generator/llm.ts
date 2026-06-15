@@ -29,23 +29,27 @@ const MAX_DESCRIPTION_CHARS = 200;
 // appear in the input inventory are silently dropped during mapping.
 // ---------------------------------------------------------------------------
 
-const llmPageSchema = z.object({
-  url: z.string(),
-  description: z.string().nullish()
-});
-
-const llmSectionSchema = z.object({
-  name: z.string(),
-  pages: z.array(llmPageSchema)
-});
-
+const llmPageSchema = z.object({ url: z.string(), description: z.string().nullish() });
+const llmSectionSchema = z.object({ name: z.string(), pages: z.array(llmPageSchema) });
 const llmResponseSchema = z.object({
   summary: z.string(),
   sections: z.array(llmSectionSchema),
-  optional: z.array(llmPageSchema).default([])
+  optional: z.array(llmPageSchema).default([]),
 });
 
 type LlmResponse = z.infer<typeof llmResponseSchema>;
+type LlmPage = z.infer<typeof llmPageSchema>;
+
+interface PageIndex {
+  knownPages: Map<string, InventoryPage>;
+  originalSectionOf: Map<string, number>;
+  originallyOptional: Set<string>;
+}
+
+interface MappingState extends PageIndex {
+  placed: Set<string>;
+  outSectionOf: Map<string, number>;
+}
 
 /** JSON Schema mirror of `llmResponseSchema` for forced tool use. */
 const TOOL_NAME = "emit_llms_txt_plan";
@@ -55,7 +59,7 @@ const TOOL_INPUT_SCHEMA = {
     summary: {
       type: "string",
       description:
-        "1-2 sentence description of what the site IS, grounded only in the provided inventory. No marketing fluff, no speculation."
+        "1-2 sentence description of what the site IS, grounded only in the provided inventory. No marketing fluff, no speculation.",
     },
     sections: {
       type: "array",
@@ -70,21 +74,15 @@ const TOOL_INPUT_SCHEMA = {
             items: {
               type: "object",
               properties: {
-                url: {
-                  type: "string",
-                  description: "Must be copied verbatim from the inventory. Never invent URLs."
-                },
-                description: {
-                  type: "string",
-                  description: "One-line description of the page (under 200 chars)."
-                }
+                url: { type: "string", description: "Must be copied verbatim from the inventory." },
+                description: { type: "string", description: "One-line page description." },
               },
-              required: ["url"]
-            }
-          }
+              required: ["url"],
+            },
+          },
         },
-        required: ["name", "pages"]
-      }
+        required: ["name", "pages"],
+      },
     },
     optional: {
       type: "array",
@@ -93,13 +91,13 @@ const TOOL_INPUT_SCHEMA = {
         type: "object",
         properties: {
           url: { type: "string" },
-          description: { type: "string" }
+          description: { type: "string" },
         },
-        required: ["url"]
-      }
-    }
+        required: ["url"],
+      },
+    },
   },
-  required: ["summary", "sections", "optional"]
+  required: ["summary", "sections", "optional"],
 };
 
 // ---------------------------------------------------------------------------
@@ -121,32 +119,41 @@ function buildAnthropicCaller(apiKey: string): ToolCaller {
           name: TOOL_NAME,
           description:
             "Emit the refined llms.txt plan: summary, renamed/reordered sections, per-page descriptions, and demotions to optional.",
-          input_schema: TOOL_INPUT_SCHEMA
-        }
+          input_schema: TOOL_INPUT_SCHEMA,
+        },
       ],
       tool_choice: { type: "tool", name: TOOL_NAME },
-      messages: [{ role: "user", content: prompt }]
+      messages: [{ role: "user", content: prompt }],
     });
     const toolUse = message.content.find((block) => block.type === "tool_use");
-    return toolUse && toolUse.type === "tool_use" ? toolUse.input : null;
+    return toolUse?.type === "tool_use" ? toolUse.input : null;
   };
 }
 
+/**
+ * Refine a deterministic inventory through Anthropic when an API key exists.
+ * @param inventory First-pass inventory to refine.
+ * @param apiKey Anthropic API key for the model call.
+ * @returns Refined summary and inventory, or null on missing key or failure.
+ */
 export async function refine(
   inventory: Inventory,
-  apiKey: string
+  apiKey: string,
 ): Promise<{ summary: string; inventory: Inventory } | null> {
-  if (!apiKey || !apiKey.trim()) return null;
+  if (apiKey.trim().length === 0) return null;
   return refineWithCaller(inventory, buildAnthropicCaller(apiKey));
 }
 
 /**
  * Core refinement with an injectable API caller. Never throws; any failure
  * (API error, malformed response, empty result) returns null.
+ * @param inventory First-pass inventory to refine.
+ * @param callTool Testable tool-call function that returns raw model output.
+ * @returns Refined summary and inventory, or null when guardrails reject it.
  */
 export async function refineWithCaller(
   inventory: Inventory,
-  callTool: ToolCaller
+  callTool: ToolCaller,
 ): Promise<{ summary: string; inventory: Inventory } | null> {
   try {
     const raw = await callTool(buildPrompt(inventory));
@@ -163,24 +170,31 @@ export async function refineWithCaller(
 // ---------------------------------------------------------------------------
 
 function truncate(value: string | null, max: number): string | null {
-  if (value == null) return null;
+  if (value === null) return null;
   const collapsed = value.replace(/\s+/g, " ").trim();
   if (!collapsed) return null;
   return collapsed.length > max ? `${collapsed.slice(0, max - 1)}…` : collapsed;
 }
 
-function promptPage(page: InventoryPage) {
+interface PromptPage {
+  url: string;
+  title: string | null;
+  description: string | null;
+  h1: string | null;
+}
+
+function promptPage(page: InventoryPage): PromptPage {
   return {
     url: page.url,
     title: truncate(page.title, MAX_FIELD_CHARS),
     description: truncate(page.description, MAX_FIELD_CHARS),
-    h1: truncate(page.h1, MAX_FIELD_CHARS)
+    h1: truncate(page.h1, MAX_FIELD_CHARS),
   };
 }
 
 function buildPrompt(inventory: Inventory): string {
   let budget = MAX_PAGES;
-  const sections: Array<{ name: string; pages: ReturnType<typeof promptPage>[] }> = [];
+  const sections: { name: string; pages: PromptPage[] }[] = [];
   for (const section of inventory.sections) {
     if (budget <= 0) break;
     const pages = section.pages.slice(0, budget).map(promptPage);
@@ -194,7 +208,7 @@ function buildPrompt(inventory: Inventory): string {
     origin: inventory.origin,
     homepageSnippet: truncate(inventory.homepageSnippet, MAX_SNIPPET_CHARS),
     sections,
-    optional
+    optional,
   };
 
   return [
@@ -212,7 +226,7 @@ function buildPrompt(inventory: Inventory): string {
     "- Do not drop pages; if unsure where a page belongs, keep it in a section close to its current one.",
     "",
     "Inventory (JSON):",
-    JSON.stringify(payload, null, 2)
+    JSON.stringify(payload, null, 2),
   ].join("\n");
 }
 
@@ -224,16 +238,11 @@ function sanitizeLine(value: string | null | undefined, max: number): string | n
   return truncate(value ?? null, max);
 }
 
-function mapResponse(
-  original: Inventory,
-  response: LlmResponse
-): { summary: string; inventory: Inventory } | null {
-  const summary = sanitizeLine(response.summary, MAX_SUMMARY_CHARS);
-  if (!summary) return null;
-
-  // Index every known page; anything outside this set is hallucinated → drop.
+function indexOriginalPages(original: Inventory): PageIndex {
   const knownPages = new Map<string, InventoryPage>();
-  const originalSectionOf = new Map<string, number>(); // url -> original section index
+  const originalSectionOf = new Map<string, number>();
+  const originallyOptional = new Set<string>();
+
   original.sections.forEach((section, index) => {
     for (const page of section.pages) {
       if (knownPages.has(page.url)) continue;
@@ -241,72 +250,107 @@ function mapResponse(
       originalSectionOf.set(page.url, index);
     }
   });
-  const originallyOptional = new Set<string>();
+
   for (const page of original.optional) {
     if (knownPages.has(page.url)) continue;
     knownPages.set(page.url, page);
     originallyOptional.add(page.url);
   }
 
-  const placed = new Set<string>();
+  return { knownPages, originalSectionOf, originallyOptional };
+}
+
+function acceptPage(candidate: LlmPage, state: MappingState): InventoryPage | null {
+  const known = state.knownPages.get(candidate.url);
+  if (!known || state.placed.has(candidate.url)) return null;
+  state.placed.add(candidate.url);
+  const description = sanitizeLine(candidate.description, MAX_DESCRIPTION_CHARS);
+  return { ...known, description: description ?? known.description };
+}
+
+function mapOutputSections(
+  sections: LlmResponse["sections"],
+  state: MappingState,
+): SectionInventory[] {
   const outSections: SectionInventory[] = [];
-  const outSectionOf = new Map<string, number>(); // url -> output section index
 
-  const acceptPage = (candidate: z.infer<typeof llmPageSchema>): InventoryPage | null => {
-    const known = knownPages.get(candidate.url);
-    if (!known || placed.has(candidate.url)) return null;
-    placed.add(candidate.url);
-    const description = sanitizeLine(candidate.description, MAX_DESCRIPTION_CHARS);
-    return { ...known, description: description ?? known.description };
-  };
-
-  for (const section of response.sections) {
+  for (const section of sections) {
     const name = sanitizeLine(section.name, MAX_SECTION_NAME_CHARS);
     if (!name) continue;
-    const pages: InventoryPage[] = [];
-    for (const candidate of section.pages) {
-      const page = acceptPage(candidate);
-      if (page) pages.push(page);
-    }
-    if (!pages.length) continue;
-    for (const page of pages) outSectionOf.set(page.url, outSections.length);
+    const pages = section.pages
+      .map((candidate) => acceptPage(candidate, state))
+      .filter((page): page is InventoryPage => page !== null);
+    if (pages.length === 0) continue;
+    for (const page of pages) state.outSectionOf.set(page.url, outSections.length);
     outSections.push({ name, pages });
   }
 
-  const outOptional: InventoryPage[] = [];
-  for (const candidate of response.optional) {
-    const page = acceptPage(candidate);
-    if (page) outOptional.push(page);
+  return outSections;
+}
+
+function mapOptionalPages(optional: LlmResponse["optional"], state: MappingState): InventoryPage[] {
+  return optional
+    .map((candidate) => acceptPage(candidate, state))
+    .filter((page): page is InventoryPage => page !== null);
+}
+
+function collectStrays(state: MappingState): Map<number, InventoryPage[]> {
+  const strays = new Map<number, InventoryPage[]>();
+
+  for (const [url, page] of state.knownPages) {
+    if (state.placed.has(url) || state.originallyOptional.has(url)) continue;
+    const sectionIndex = state.originalSectionOf.get(url);
+    if (sectionIndex === undefined) continue;
+    strays.set(sectionIndex, [...(strays.get(sectionIndex) ?? []), page]);
   }
+
+  return strays;
+}
+
+function reinstateOmittedPages(
+  original: Inventory,
+  state: MappingState,
+  output: { sections: SectionInventory[]; optional: InventoryPage[] },
+): void {
+  for (const [url, page] of state.knownPages) {
+    if (!state.placed.has(url) && state.originallyOptional.has(url)) output.optional.push(page);
+  }
+
+  for (const [sectionIndex, pages] of collectStrays(state)) {
+    const section = original.sections[sectionIndex];
+    const target = majorityDestination(section, state.outSectionOf);
+    const destination = target === null ? undefined : output.sections[target];
+    if (destination) destination.pages.push(...pages);
+    else output.sections.push({ name: section.name, pages });
+  }
+}
+
+function mapResponse(
+  original: Inventory,
+  response: LlmResponse,
+): { summary: string; inventory: Inventory } | null {
+  const summary = sanitizeLine(response.summary, MAX_SUMMARY_CHARS);
+  if (!summary) return null;
+
+  // Index every known page; anything outside this set is hallucinated → drop.
+  const pageIndex = indexOriginalPages(original);
+  const state: MappingState = {
+    ...pageIndex,
+    placed: new Set<string>(),
+    outSectionOf: new Map<string, number>(),
+  };
+  const outSections = mapOutputSections(response.sections, state);
+  const outOptional = mapOptionalPages(response.optional, state);
 
   // Reinstate pages the LLM omitted (or that were capped out of the prompt):
   // optional pages go back to optional; section pages follow wherever the
   // majority of their original section landed, else their original section
   // is recreated at the end. Omitted pages must never be lost.
-  const strays = new Map<number, InventoryPage[]>(); // original section index -> pages
-  for (const [url, page] of knownPages) {
-    if (placed.has(url)) continue;
-    if (originallyOptional.has(url)) {
-      outOptional.push(page);
-      continue;
-    }
-    const sectionIndex = originalSectionOf.get(url);
-    if (sectionIndex == null) continue;
-    const list = strays.get(sectionIndex) ?? [];
-    list.push(page);
-    strays.set(sectionIndex, list);
-  }
+  reinstateOmittedPages(original, state, { sections: outSections, optional: outOptional });
 
-  for (const [sectionIndex, pages] of strays) {
-    const target = majorityDestination(original.sections[sectionIndex], outSectionOf);
-    if (target != null) {
-      outSections[target].pages.push(...pages);
-    } else {
-      outSections.push({ name: original.sections[sectionIndex].name, pages });
-    }
+  if (state.knownPages.size > 0 && outSections.length === 0 && outOptional.length === 0) {
+    return null;
   }
-
-  if (knownPages.size > 0 && outSections.length === 0 && outOptional.length === 0) return null;
 
   return {
     summary,
@@ -315,20 +359,25 @@ function mapResponse(
       origin: original.origin,
       homepageSnippet: original.homepageSnippet,
       sections: outSections,
-      optional: outOptional
-    }
+      optional: outOptional,
+    },
   };
 }
 
-/** Output section index where most pages of `section` ended up, or null. */
+/**
+ * Output section index where most pages of `section` ended up, or null.
+ * @param section Original section whose pages may have been moved.
+ * @param outSectionOf Map from URL to output section index.
+ * @returns Output section index with the most votes, or null.
+ */
 function majorityDestination(
   section: SectionInventory,
-  outSectionOf: Map<string, number>
+  outSectionOf: Map<string, number>,
 ): number | null {
   const votes = new Map<number, number>();
   for (const page of section.pages) {
     const index = outSectionOf.get(page.url);
-    if (index == null) continue;
+    if (index === undefined) continue;
     votes.set(index, (votes.get(index) ?? 0) + 1);
   }
   let best: number | null = null;

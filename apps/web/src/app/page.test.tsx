@@ -4,11 +4,11 @@ import Home from "./page";
 
 const { pushMock, createSiteMock } = vi.hoisted(() => ({
   pushMock: vi.fn(),
-  createSiteMock: vi.fn()
+  createSiteMock: vi.fn(),
 }));
 
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push: pushMock })
+  useRouter: () => ({ push: pushMock }),
 }));
 
 vi.mock("@/lib/api", async (importOriginal) => {

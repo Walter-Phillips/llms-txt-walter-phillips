@@ -4,7 +4,8 @@ import { app } from "./app";
 describe("api", () => {
   it("returns health", async () => {
     const response = await app.request("/health");
+    const body: unknown = await response.json();
     expect(response.status).toBe(200);
-    expect(await response.json()).toEqual({ status: "ok" });
+    expect(body).toEqual({ status: "ok" });
   });
 });

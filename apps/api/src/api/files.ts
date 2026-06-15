@@ -1,14 +1,23 @@
-import { Hono } from "hono";
-import type { Context } from "hono";
+import { type Context, Hono } from "hono";
 import { drizzle } from "drizzle-orm/d1";
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { sites, fileVersions } from "@profound-takehome/db";
-import type { Env } from "../bindings";
+import type { Environment } from "../bindings";
 import { normalizeOrigin } from "../lib/url";
 
-export const filesRouter = new Hono<{ Bindings: Env }>();
+export const filesRouter = new Hono<{ Bindings: Environment }>();
 
 type SiteRow = typeof sites.$inferSelect;
+
+interface VersionRange {
+  from: number;
+  to: number;
+}
+
+interface DiffLabels {
+  from: string;
+  to: string;
+}
 
 // ---------------------------------------------------------------------------
 // Shared version-history handlers — operate on an already-resolved site row.
@@ -16,11 +25,19 @@ type SiteRow = typeof sites.$inferSelect;
 // the listing/diff logic lives in exactly one place.
 // ---------------------------------------------------------------------------
 
+/**
+ * Lists stored file versions for a site.
+ *
+ * @param c Active Hono request context.
+ * @param db Drizzle database connection.
+ * @param site Site whose versions should be listed.
+ * @returns JSON response containing the version rows.
+ */
 export async function listVersions(
-  c: Context<{ Bindings: Env }>,
+  c: Context<{ Bindings: Environment }>,
   db: ReturnType<typeof drizzle>,
-  site: SiteRow
-) {
+  site: SiteRow,
+): Promise<Response> {
   const versions = await db
     .select()
     .from(fileVersions)
@@ -29,13 +46,22 @@ export async function listVersions(
   return c.json({ versions });
 }
 
+/**
+ * Computes a unified diff between two stored file versions.
+ *
+ * @param c Active Hono request context.
+ * @param db Drizzle database connection.
+ * @param site Site that owns both versions.
+ * @param versions Version numbers to compare.
+ * @returns JSON response with the generated diff or an error.
+ */
 export async function computeDiff(
-  c: Context<{ Bindings: Env }>,
+  c: Context<{ Bindings: Environment }>,
   db: ReturnType<typeof drizzle>,
   site: SiteRow,
-  from: number,
-  to: number
-) {
+  versions: VersionRange,
+): Promise<Response> {
+  const { from, to } = versions;
   const rows = await db
     .select()
     .from(fileVersions)
@@ -44,21 +70,30 @@ export async function computeDiff(
   const toRow = rows.find((r) => r.version === to);
   if (!fromRow || !toRow) return c.json({ error: "version_not_found" }, 404);
 
-  const [fromObj, toObj] = await Promise.all([
+  const [fromObject, toObject] = await Promise.all([
     c.env.FILES.get(fromRow.r2Key),
-    c.env.FILES.get(toRow.r2Key)
+    c.env.FILES.get(toRow.r2Key),
   ]);
-  if (!fromObj || !toObj) return c.json({ error: "file_missing" }, 500);
+  if (!fromObject || !toObject) return c.json({ error: "file_missing" }, 500);
 
-  const [fromText, toText] = await Promise.all([fromObj.text(), toObj.text()]);
-  const diff = unifiedDiff(fromText, toText, `llms.txt v${from}`, `llms.txt v${to}`);
+  const [fromText, toText] = await Promise.all([fromObject.text(), toObject.text()]);
+  const diff = unifiedDiff(fromText, toText, {
+    from: `llms.txt v${String(from)}`,
+    to: `llms.txt v${String(to)}`,
+  });
   return c.json({ from, to, diff });
 }
 
-export function domainCandidates(param: string): string[] {
-  let decoded = param;
+/**
+ * Builds possible stored-domain keys from a route parameter.
+ *
+ * @param parameter Raw or encoded domain route parameter.
+ * @returns Candidate origin strings to query.
+ */
+export function domainCandidates(parameter: string): string[] {
+  let decoded = parameter;
   try {
-    decoded = decodeURIComponent(param);
+    decoded = decodeURIComponent(parameter);
   } catch {
     // Hono may already decode route params; keep the original value.
   }
@@ -74,11 +109,11 @@ export function domainCandidates(param: string): string[] {
   return [...candidates];
 }
 
-async function findSiteByDomainParam(
+async function findSiteByDomainParameter(
   db: ReturnType<typeof drizzle>,
-  param: string
+  parameter: string,
 ): Promise<SiteRow | undefined> {
-  for (const candidate of domainCandidates(param)) {
+  for (const candidate of domainCandidates(parameter)) {
     const site = await db.select().from(sites).where(eq(sites.domain, candidate)).get();
     if (site) return site;
   }
@@ -89,7 +124,7 @@ async function findSiteByDomainParam(
 // The domain segment may be an encoded origin, e.g. https%3A%2F%2Fexample.com.
 filesRouter.get("/:domain/llms.txt", async (c) => {
   const db = drizzle(c.env.DB);
-  const site = await findSiteByDomainParam(db, c.req.param("domain"));
+  const site = await findSiteByDomainParameter(db, c.req.param("domain"));
   if (!site) return c.text("not found", 404);
 
   const latest = await db
@@ -101,21 +136,21 @@ filesRouter.get("/:domain/llms.txt", async (c) => {
     .get();
   if (!latest) return c.text("not generated yet", 404);
 
-  const obj = await c.env.FILES.get(latest.r2Key);
-  if (!obj) return c.text("file missing", 500);
+  const object = await c.env.FILES.get(latest.r2Key);
+  if (!object) return c.text("file missing", 500);
 
-  return new Response(obj.body, {
+  return new Response(object.body, {
     headers: {
       "content-type": "text/markdown; charset=utf-8",
       "cache-control": "public, max-age=300",
-      "x-llms-txt-version": String(latest.version)
-    }
+      "x-llms-txt-version": String(latest.version),
+    },
   });
 });
 
 filesRouter.get("/:domain/versions", async (c) => {
   const db = drizzle(c.env.DB);
-  const site = await findSiteByDomainParam(db, c.req.param("domain"));
+  const site = await findSiteByDomainParameter(db, c.req.param("domain"));
   if (!site) return c.json({ error: "not_found" }, 404);
   return listVersions(c, db, site);
 });
@@ -126,7 +161,7 @@ filesRouter.get("/:domain/versions/:v", async (c) => {
   if (!Number.isInteger(version) || version < 1) return c.json({ error: "invalid_version" }, 400);
 
   const db = drizzle(c.env.DB);
-  const site = await findSiteByDomainParam(db, c.req.param("domain"));
+  const site = await findSiteByDomainParameter(db, c.req.param("domain"));
   if (!site) return c.json({ error: "not_found" }, 404);
 
   const row = await db
@@ -136,15 +171,15 @@ filesRouter.get("/:domain/versions/:v", async (c) => {
     .get();
   if (!row) return c.json({ error: "not_found" }, 404);
 
-  const obj = await c.env.FILES.get(row.r2Key);
-  if (!obj) return c.json({ error: "file_missing" }, 500);
+  const object = await c.env.FILES.get(row.r2Key);
+  if (!object) return c.json({ error: "file_missing" }, 500);
 
-  return new Response(obj.body, {
+  return new Response(object.body, {
     headers: {
       "content-type": "text/markdown; charset=utf-8",
       "cache-control": "public, max-age=31536000, immutable",
-      "x-llms-txt-version": String(row.version)
-    }
+      "x-llms-txt-version": String(row.version),
+    },
   });
 });
 
@@ -157,10 +192,10 @@ filesRouter.get("/:domain/diff", async (c) => {
   }
 
   const db = drizzle(c.env.DB);
-  const site = await findSiteByDomainParam(db, c.req.param("domain"));
+  const site = await findSiteByDomainParameter(db, c.req.param("domain"));
   if (!site) return c.json({ error: "not_found" }, 404);
 
-  return computeDiff(c, db, site, from, to);
+  return computeDiff(c, db, site, { from, to });
 });
 
 // ---------------------------------------------------------------------------
@@ -168,7 +203,10 @@ filesRouter.get("/:domain/diff", async (c) => {
 // unit tests; llms.txt files are small so O(n·m) DP is fine.
 // ---------------------------------------------------------------------------
 
-type DiffOp = { tag: " " | "-" | "+"; line: string };
+interface DiffOp {
+  tag: " " | "-" | "+";
+  line: string;
+}
 
 function diffLines(a: string[], b: string[]): DiffOp[] {
   const n = a.length;
@@ -201,60 +239,33 @@ function diffLines(a: string[], b: string[]): DiffOp[] {
   return ops;
 }
 
+/**
+ * Formats a unified diff for two text bodies.
+ *
+ * @param fromText Original text content.
+ * @param toText Updated text content.
+ * @param labels File labels for the diff header.
+ * @param context Number of unchanged context lines around changes.
+ * @returns Unified diff text, or an empty string when unchanged.
+ */
 export function unifiedDiff(
   fromText: string,
   toText: string,
-  fromLabel: string,
-  toLabel: string,
-  context = 3
+  labels: DiffLabels,
+  context = 3,
 ): string {
   const a = splitLines(fromText);
   const b = splitLines(toText);
   const ops = diffLines(a, b);
-
-  // Line numbers (0-based) each op starts at, in the old and new files.
-  const oldAt: number[] = [];
-  const newAt: number[] = [];
-  let o = 0;
-  let nw = 0;
-  for (const op of ops) {
-    oldAt.push(o);
-    newAt.push(nw);
-    if (op.tag !== "+") o++;
-    if (op.tag !== "-") nw++;
-  }
-
-  // Group changed op indices into hunks, merging when the equal gap ≤ 2·context.
+  const positions = linePositions(ops);
   const changed = ops.flatMap((op, idx) => (op.tag === " " ? [] : [idx]));
   if (changed.length === 0) return "";
 
-  const ranges: Array<[number, number]> = [];
-  for (const idx of changed) {
-    const last = ranges[ranges.length - 1];
-    if (last && idx - last[1] <= 2 * context) last[1] = idx;
-    else ranges.push([idx, idx]);
-  }
+  const hunks = changedRanges(changed, context).flatMap((range) =>
+    formatHunk(ops, positions, range, context),
+  );
 
-  const hunks: string[] = [];
-  for (const [s, e] of ranges) {
-    const start = Math.max(0, s - context);
-    const end = Math.min(ops.length - 1, e + context);
-    let oldCount = 0;
-    let newCount = 0;
-    const body: string[] = [];
-    for (let k = start; k <= end; k++) {
-      const op = ops[k];
-      if (op.tag !== "+") oldCount++;
-      if (op.tag !== "-") newCount++;
-      body.push(op.tag + op.line);
-    }
-    // Unified-diff convention: a zero-count side reports the line *before*.
-    const oldStart = oldCount === 0 ? oldAt[start] : oldAt[start] + 1;
-    const newStart = newCount === 0 ? newAt[start] : newAt[start] + 1;
-    hunks.push(`@@ -${oldStart},${oldCount} +${newStart},${newCount} @@`, ...body);
-  }
-
-  return [`--- ${fromLabel}`, `+++ ${toLabel}`, ...hunks].join("\n") + "\n";
+  return [`--- ${labels.from}`, `+++ ${labels.to}`, ...hunks].join("\n") + "\n";
 }
 
 function splitLines(text: string): string[] {
@@ -262,4 +273,50 @@ function splitLines(text: string): string[] {
   const lines = text.split("\n");
   if (lines[lines.length - 1] === "") lines.pop(); // ignore trailing newline
   return lines;
+}
+
+function linePositions(ops: DiffOp[]): { oldAt: number[]; newAt: number[] } {
+  const oldAt: number[] = [];
+  const newAt: number[] = [];
+  let oldLine = 0;
+  let newLine = 0;
+  for (const op of ops) {
+    oldAt.push(oldLine);
+    newAt.push(newLine);
+    if (op.tag !== "+") oldLine++;
+    if (op.tag !== "-") newLine++;
+  }
+  return { oldAt, newAt };
+}
+
+function changedRanges(changed: number[], context: number): [number, number][] {
+  const ranges: [number, number][] = [];
+  for (const index of changed) {
+    const last = ranges.at(-1);
+    if (last === undefined || index - last[1] > 2 * context) {
+      ranges.push([index, index]);
+    } else {
+      last[1] = index;
+    }
+  }
+  return ranges;
+}
+
+function formatHunk(
+  ops: DiffOp[],
+  positions: { oldAt: number[]; newAt: number[] },
+  range: [number, number],
+  context: number,
+): string[] {
+  const start = Math.max(0, range[0] - context);
+  const end = Math.min(ops.length - 1, range[1] + context);
+  const body = ops.slice(start, end + 1).map((op) => op.tag + op.line);
+  const oldCount = ops.slice(start, end + 1).filter((op) => op.tag !== "+").length;
+  const newCount = ops.slice(start, end + 1).filter((op) => op.tag !== "-").length;
+  const oldStart = oldCount === 0 ? positions.oldAt[start] : positions.oldAt[start] + 1;
+  const newStart = newCount === 0 ? positions.newAt[start] : positions.newAt[start] + 1;
+  const header = `@@ -${String(oldStart)},${String(oldCount)} +${String(newStart)},${String(
+    newCount,
+  )} @@`;
+  return [header, ...body];
 }

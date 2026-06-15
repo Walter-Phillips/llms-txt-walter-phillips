@@ -15,7 +15,7 @@ export interface JobStatusState {
 /** Polls GET /api/jobs/:runId until the run reaches a terminal state. */
 export function useJobStatus(
   runId: string,
-  intervalMs: number = JOB_POLL_INTERVAL_MS
+  intervalMs: number = JOB_POLL_INTERVAL_MS,
 ): JobStatusState {
   const [state, setState] = useState<JobStatusState>({ status: null, pollError: null });
 

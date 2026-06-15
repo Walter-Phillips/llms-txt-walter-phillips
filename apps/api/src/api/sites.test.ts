@@ -1,34 +1,44 @@
 import { sites } from "@profound-takehome/db";
 import { Hono } from "hono";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { Env } from "../bindings";
-import { createTestEnv, FakeDb } from "../test-helpers";
+import type { Environment } from "../bindings";
+import { createTestEnvironment, FakeDatabase } from "../test-helpers";
 import { sitesRouter } from "./sites";
 
 vi.mock("drizzle-orm/d1", () => ({
-  drizzle: vi.fn((db) => db)
+  drizzle: vi.fn((db: unknown): unknown => db),
 }));
 
-function appForSites() {
-  const app = new Hono<{ Bindings: Env }>();
+interface CreateSiteResponse {
+  siteId: string;
+  runId: string;
+}
+
+function appForSites(): Hono<{ Bindings: Environment }> {
+  const app = new Hono<{ Bindings: Environment }>();
   app.route("/api/sites", sitesRouter);
   return app;
 }
 
-function jsonPost(url: string) {
+function jsonPost(url: string): RequestInit {
   return {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ url })
+    body: JSON.stringify({ url }),
   };
 }
 
-function monitoringPatch(enabled: boolean) {
+function monitoringPatch(enabled: boolean): RequestInit {
   return {
     method: "PATCH",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ enabled })
+    body: JSON.stringify({ enabled }),
   };
+}
+
+async function readJson<T>(response: Response): Promise<T> {
+  const value: unknown = await response.json();
+  return value as T;
 }
 
 describe("sitesRouter", () => {
@@ -41,38 +51,40 @@ describe("sitesRouter", () => {
     const response = await appForSites().request(
       "/api/sites",
       jsonPost("not a url"),
-      createTestEnv(new FakeDb())
+      createTestEnvironment(new FakeDatabase()),
     );
 
     expect(response.status).toBe(400);
-    expect(await response.json()).toEqual({ error: "invalid_url" });
+    expect(await readJson(response)).toEqual({ error: "invalid_url" });
   });
 
   it("rejects a private URL", async () => {
     const response = await appForSites().request(
       "/api/sites",
       jsonPost("http://127.0.0.1"),
-      createTestEnv(new FakeDb())
+      createTestEnvironment(new FakeDatabase()),
     );
 
     expect(response.status).toBe(400);
-    expect(await response.json()).toEqual({ error: "unresolvable_url" });
+    expect(await readJson(response)).toEqual({ error: "unresolvable_url" });
   });
 
   it("creates a new site, initial crawl run, and discover message", async () => {
     vi.setSystemTime(new Date("2026-06-14T12:00:00Z"));
-    const db = new FakeDb();
+    const db = new FakeDatabase();
     db.queueSelect(sites, undefined);
-    const env = createTestEnv(db);
+    const send = vi.fn(() => Promise.resolve(undefined));
+    const env = createTestEnvironment(db);
+    env.CRAWL_QUEUE = { send } as unknown as Environment["CRAWL_QUEUE"];
 
     const response = await appForSites().request(
       "/api/sites",
       jsonPost("https://Example.com/docs"),
-      env
+      env,
     );
 
     expect(response.status).toBe(200);
-    const body = (await response.json()) as { siteId: string; runId: string };
+    const body = await readJson<CreateSiteResponse>(response);
     expect(body.siteId).toHaveLength(12);
     expect(body.runId).toHaveLength(12);
     expect(db.inserts).toHaveLength(2);
@@ -84,8 +96,8 @@ describe("sitesRouter", () => {
         monitoring: 0,
         checkIntervalS: 86400,
         changeStreak: 0,
-        createdAt: 1781438400
-      }
+        createdAt: 1781438400,
+      },
     });
     expect(db.inserts[1]).toMatchObject({
       table: "crawlRuns",
@@ -94,14 +106,14 @@ describe("sitesRouter", () => {
         siteId: body.siteId,
         trigger: "initial",
         status: "queued",
-        startedAt: 1781438400
-      }
+        startedAt: 1781438400,
+      },
     });
-    expect(env.CRAWL_QUEUE.send).toHaveBeenCalledWith({
+    expect(send).toHaveBeenCalledWith({
       type: "discover",
       runId: body.runId,
       siteId: body.siteId,
-      url: "https://example.com"
+      url: "https://example.com",
     });
   });
 
@@ -113,20 +125,22 @@ describe("sitesRouter", () => {
       monitoring: 0,
       checkIntervalS: 86400,
       changeStreak: 0,
-      createdAt: 1
+      createdAt: 1,
     };
-    const db = new FakeDb();
+    const db = new FakeDatabase();
     db.queueSelect(sites, existing);
-    const env = createTestEnv(db);
+    const send = vi.fn(() => Promise.resolve(undefined));
+    const env = createTestEnvironment(db);
+    env.CRAWL_QUEUE = { send } as unknown as Environment["CRAWL_QUEUE"];
 
     const response = await appForSites().request(
       "/api/sites",
       jsonPost("https://example.com/pricing"),
-      env
+      env,
     );
 
     expect(response.status).toBe(200);
-    const body = (await response.json()) as { siteId: string; runId: string };
+    const body = await readJson<CreateSiteResponse>(response);
     expect(body.siteId).toBe(existing.id);
     expect(db.inserts).toHaveLength(1);
     expect(db.inserts[0]).toMatchObject({
@@ -136,14 +150,14 @@ describe("sitesRouter", () => {
         siteId: existing.id,
         trigger: "manual",
         status: "queued",
-        startedAt: 1781438400
-      }
+        startedAt: 1781438400,
+      },
     });
-    expect(env.CRAWL_QUEUE.send).toHaveBeenCalledWith({
+    expect(send).toHaveBeenCalledWith({
       type: "discover",
       runId: body.runId,
       siteId: existing.id,
-      url: "https://example.com"
+      url: "https://example.com",
     });
   });
 
@@ -156,24 +170,24 @@ describe("sitesRouter", () => {
       checkIntervalS: 3600,
       nextCheckAt: null,
       changeStreak: 0,
-      createdAt: 1
+      createdAt: 1,
     };
     const updated = { ...site, monitoring: 1, nextCheckAt: 1781442000 };
-    const db = new FakeDb();
+    const db = new FakeDatabase();
     db.queueSelect(sites, site);
     db.queueSelect(sites, updated);
 
     const response = await appForSites().request(
       "/api/sites/site_1/monitoring",
       monitoringPatch(true),
-      createTestEnv(db)
+      createTestEnvironment(db),
     );
 
     expect(response.status).toBe(200);
     expect(db.updates).toEqual([
-      { table: "sites", values: { monitoring: 1, nextCheckAt: 1781442000 } }
+      { table: "sites", values: { monitoring: 1, nextCheckAt: 1781442000 } },
     ]);
-    expect(await response.json()).toEqual({ site: updated });
+    expect(await readJson(response)).toEqual({ site: updated });
   });
 
   it("disables monitoring and clears nextCheckAt", async () => {
@@ -185,36 +199,36 @@ describe("sitesRouter", () => {
       checkIntervalS: 3600,
       nextCheckAt: 1781442000,
       changeStreak: 0,
-      createdAt: 1
+      createdAt: 1,
     };
     const updated = { ...site, monitoring: 0, nextCheckAt: null };
-    const db = new FakeDb();
+    const db = new FakeDatabase();
     db.queueSelect(sites, site);
     db.queueSelect(sites, updated);
 
     const response = await appForSites().request(
       "/api/sites/site_1/monitoring",
       monitoringPatch(false),
-      createTestEnv(db)
+      createTestEnvironment(db),
     );
 
     expect(response.status).toBe(200);
     expect(db.updates).toEqual([{ table: "sites", values: { monitoring: 0, nextCheckAt: null } }]);
-    expect(await response.json()).toEqual({ site: updated });
+    expect(await readJson(response)).toEqual({ site: updated });
   });
 
   it("returns 404 when toggling monitoring for an unknown site", async () => {
-    const db = new FakeDb();
+    const db = new FakeDatabase();
     db.queueSelect(sites, undefined);
 
     const response = await appForSites().request(
       "/api/sites/missing/monitoring",
       monitoringPatch(true),
-      createTestEnv(db)
+      createTestEnvironment(db),
     );
 
     expect(response.status).toBe(404);
-    expect(await response.json()).toEqual({ error: "not_found" });
+    expect(await readJson(response)).toEqual({ error: "not_found" });
     expect(db.updates).toEqual([]);
     expect(db.inserts.filter((insert) => insert.table === "crawlRuns")).toHaveLength(0);
   });

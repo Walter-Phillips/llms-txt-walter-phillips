@@ -23,7 +23,7 @@ function makeRun(overrides: Partial<Run>): Run {
     error: null,
     startedAt: Date.now(),
     finishedAt: null,
-    ...overrides
+    ...overrides,
   };
 }
 
@@ -33,7 +33,7 @@ function crawlingStatus(): JobStatusResponse {
       status: "crawling",
       pagesFound: 80,
       pagesCrawled: 23,
-      discoveryMethod: "sitemap"
+      discoveryMethod: "sitemap",
     }),
     live: {
       runId: "run_1",
@@ -42,8 +42,8 @@ function crawlingStatus(): JobStatusResponse {
       pagesCrawled: 23,
       discoveryMethod: "sitemap",
       frontierSize: 57,
-      inFlight: 4
-    }
+      inFlight: 4,
+    },
   };
 }
 
@@ -79,8 +79,8 @@ it("advances through generating to done and notifies the caller", async () => {
         status: "generating",
         pagesFound: 80,
         pagesCrawled: 80,
-        discoveryMethod: "sitemap"
-      })
+        discoveryMethod: "sitemap",
+      }),
     })
     .mockResolvedValue({
       run: makeRun({
@@ -88,8 +88,8 @@ it("advances through generating to done and notifies the caller", async () => {
         pagesFound: 80,
         pagesCrawled: 80,
         discoveryMethod: "sitemap",
-        finishedAt: Date.now()
-      })
+        finishedAt: Date.now(),
+      }),
     });
 
   render(<ProgressView runId="run_1" onDone={onDone} pollIntervalMs={5} />);
@@ -100,7 +100,7 @@ it("advances through generating to done and notifies the caller", async () => {
 
 it("renders a friendly, specific error state when the run fails", async () => {
   getJobMock.mockResolvedValue({
-    run: makeRun({ status: "error", error: "fetch_failed: connection refused" })
+    run: makeRun({ status: "error", error: "fetch_failed: connection refused" }),
   });
   render(<ProgressView runId="run_1" onDone={vi.fn()} pollIntervalMs={5} />);
 

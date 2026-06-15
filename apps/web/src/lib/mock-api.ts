@@ -3,7 +3,7 @@ import type {
   JobStatusResponse,
   PageInventoryItem,
   Run,
-  Site
+  Site,
 } from "@profound-takehome/shared";
 import { ApiRequestError, type LlmsApi } from "./api";
 import { unifiedDiff } from "./diff";
@@ -21,7 +21,7 @@ export const MOCK_TIMELINE = {
   crawlingUntil: 6000,
   generatingUntil: 7800,
   pagesFound: 24,
-  errorAt: 2000
+  errorAt: 2000,
 } as const;
 
 interface MockRun {
@@ -88,7 +88,7 @@ export function makeLlmsTxt(origin: string, version: number): string {
     "## Optional",
     "",
     `- [Blog](${origin}/blog): Engineering notes and release deep-dives`,
-    `- [About](${origin}/about): Company, team, and contact details`
+    `- [About](${origin}/about): Company, team, and contact details`,
   ].filter((l): l is string => l !== null);
   return lines.join("\n") + "\n";
 }
@@ -100,85 +100,85 @@ function makePages(origin: string): PageInventoryItem[] {
       title: `${titleCase(origin)} — Home`,
       description: "Landing page",
       sectionHint: null,
-      status: "ok"
+      status: "ok",
     },
     {
       url: `${origin}/docs/quickstart`,
       title: "Quickstart",
       description: "Install and ship in five minutes",
       sectionHint: "Docs",
-      status: "ok"
+      status: "ok",
     },
     {
       url: `${origin}/docs/api`,
       title: "API reference",
       description: "Endpoints and types",
       sectionHint: "Docs",
-      status: "ok"
+      status: "ok",
     },
     {
       url: `${origin}/docs/auth`,
       title: "Authentication",
       description: "Tokens, scopes, rotation",
       sectionHint: "Docs",
-      status: "ok"
+      status: "ok",
     },
     {
       url: `${origin}/docs/self-hosting`,
       title: "Self-hosting",
       description: "Run on your own infra",
       sectionHint: "Docs",
-      status: "ok"
+      status: "ok",
     },
     {
       url: `${origin}/pricing`,
       title: "Pricing",
       description: "Plans and limits",
       sectionHint: "Product",
-      status: "ok"
+      status: "ok",
     },
     {
       url: `${origin}/integrations`,
       title: "Integrations",
       description: "Connectors and webhooks",
       sectionHint: "Product",
-      status: "ok"
+      status: "ok",
     },
     {
       url: `${origin}/changelog`,
       title: "Changelog",
       description: "Release notes",
       sectionHint: "Product",
-      status: "ok"
+      status: "ok",
     },
     {
       url: `${origin}/blog`,
       title: "Blog",
       description: "Engineering notes",
       sectionHint: "Optional",
-      status: "ok"
+      status: "ok",
     },
     {
       url: `${origin}/about`,
       title: "About",
       description: "Company and contact",
       sectionHint: "Optional",
-      status: "ok"
+      status: "ok",
     },
     {
       url: `${origin}/admin`,
       title: null,
       description: null,
       sectionHint: null,
-      status: "skipped"
+      status: "skipped",
     },
     {
       url: `${origin}/search`,
       title: "Search",
       description: null,
       sectionHint: null,
-      status: "excluded"
-    }
+      status: "excluded",
+    },
   ];
 }
 
@@ -199,7 +199,7 @@ function ensureSite(origin: string): MockSite {
     version: v,
     r2Key: `${origin}/llms.txt/v${v}`,
     changeSummary: v === 1 ? "initial generation" : "1 page added, 1 page modified",
-    createdAt: now - (3 - v) * 7 * DAY_MS
+    createdAt: now - (3 - v) * 7 * DAY_MS,
   }));
   const record: MockSite = {
     site: {
@@ -210,14 +210,14 @@ function ensureSite(origin: string): MockSite {
       checkIntervalS: 21600,
       nextCheckAt: null,
       changeStreak: 0,
-      createdAt: now - 14 * DAY_MS
+      createdAt: now - 14 * DAY_MS,
     },
     versions: seeded,
     contents: new Map([
       [1, makeLlmsTxt(origin, 1)],
-      [2, makeLlmsTxt(origin, 2)]
+      [2, makeLlmsTxt(origin, 2)],
     ]),
-    pages: makePages(origin)
+    pages: makePages(origin),
   };
   sites.set(id, record);
   sitesByOrigin.set(origin, id);
@@ -240,7 +240,7 @@ function settleRun(mockRun: MockRun): void {
     version: mockRun.publishesVersion,
     r2Key: `${record.site.domain}/llms.txt/v${mockRun.publishesVersion}`,
     changeSummary: "1 page added, 2 pages modified",
-    createdAt: Date.now()
+    createdAt: Date.now(),
   });
 }
 
@@ -289,7 +289,7 @@ function buildRun(mockRun: MockRun): JobStatusResponse {
       status === "error" ? "fetch_failed: could not reach the site (connection refused)" : null,
     startedAt: mockRun.startedAt,
     finishedAt:
-      status === "done" || status === "error" ? mockRun.startedAt + t.generatingUntil : null
+      status === "done" || status === "error" ? mockRun.startedAt + t.generatingUntil : null,
   };
 
   if (status === "done" || status === "error") return { run };
@@ -302,8 +302,8 @@ function buildRun(mockRun: MockRun): JobStatusResponse {
       pagesCrawled: crawled,
       discoveryMethod: elapsed >= t.queuedUntil ? "sitemap" : null,
       frontierSize: Math.max(0, found - crawled),
-      inFlight: status === "crawling" ? Math.min(4, Math.max(0, found - crawled)) : 0
-    }
+      inFlight: status === "crawling" ? Math.min(4, Math.max(0, found - crawled)) : 0,
+    },
   };
 }
 
@@ -332,7 +332,7 @@ export const mockClient = {
       siteId: record.site.id,
       startedAt: Date.now(),
       shouldFail: hostnameFromOrigin(origin).includes("error"),
-      publishesVersion: (latest?.version ?? 0) + 1
+      publishesVersion: (latest?.version ?? 0) + 1,
     });
     return { siteId: record.site.id, runId };
   },
@@ -384,7 +384,7 @@ export const mockClient = {
     const latest = record ? latestVersion(record) : null;
     if (!record || !latest) throw new ApiRequestError(404, "file_not_found");
     return record.contents.get(latest.version) ?? makeLlmsTxt(origin, latest.version);
-  }
+  },
 } satisfies LlmsApi;
 
 // Compile-time guard: mockClient must satisfy the same contract as the real

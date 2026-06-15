@@ -9,7 +9,7 @@ const STEPS = [
   { key: "discovering", label: "Discovering" },
   { key: "crawling", label: "Crawling" },
   { key: "generating", label: "Generating" },
-  { key: "done", label: "Done" }
+  { key: "done", label: "Done" },
 ] as const;
 
 type StepKey = (typeof STEPS)[number]["key"];

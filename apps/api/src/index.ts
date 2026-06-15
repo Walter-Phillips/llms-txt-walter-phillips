@@ -1,5 +1,5 @@
 import { app } from "./app";
-import type { CrawlMessage, Env, MonitorMessage } from "./bindings";
+import type { CrawlMessage, Environment, MonitorMessage } from "./bindings";
 import { handleCrawlBatch } from "./queue/crawl-consumer";
 import { handleMonitorBatch } from "./queue/monitor-consumer";
 import { enqueueDueMonitorJobs } from "./monitor/schedule";
@@ -11,8 +11,8 @@ export default {
 
   async queue(
     batch: MessageBatch<CrawlMessage | MonitorMessage>,
-    env: Env,
-    ctx: ExecutionContext
+    env: Environment,
+    ctx: ExecutionContext,
   ): Promise<void> {
     if (batch.queue === "crawl-queue") {
       await handleCrawlBatch(batch as MessageBatch<CrawlMessage>, env, ctx);
@@ -21,11 +21,7 @@ export default {
     }
   },
 
-  async scheduled(
-    _controller: ScheduledController,
-    env: Env,
-    ctx: ExecutionContext
-  ): Promise<void> {
+  scheduled(_controller: ScheduledController, env: Environment, ctx: ExecutionContext): void {
     ctx.waitUntil(enqueueDueMonitorJobs(env));
-  }
-} satisfies ExportedHandler<Env, CrawlMessage | MonitorMessage>;
+  },
+} satisfies ExportedHandler<Environment, CrawlMessage | MonitorMessage>;

@@ -6,7 +6,7 @@ function response(url: string, status = 200): Response {
     url,
     status,
     headers: new Headers(),
-    body: null
+    body: null,
   } as Response;
 }
 
@@ -18,18 +18,18 @@ describe("politeFetch", () => {
   it("rejects redirects to internal hosts", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () => response("http://169.254.169.254/"))
+      vi.fn(() => Promise.resolve(response("http://169.254.169.254/"))),
     );
 
     await expect(politeFetch("https://example.com")).rejects.toThrow(
-      "blocked redirect to internal host"
+      "blocked redirect to internal host",
     );
   });
 
   it("allows public final URLs", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () => response("https://example.com/final", 204))
+      vi.fn(() => Promise.resolve(response("https://example.com/final", 204))),
     );
 
     await expect(politeFetch("https://example.com")).resolves.toMatchObject({ status: 204 });

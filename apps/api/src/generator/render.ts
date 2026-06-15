@@ -4,14 +4,22 @@ function clean(text: string): string {
   return text.replace(/\s+/g, " ").trim();
 }
 
-/** Markdown link labels can't contain square brackets; swap for parens. */
+/**
+ * Markdown link labels can't contain square brackets; swap for parens.
+ * @param p Page metadata to render.
+ * @returns Markdown-safe link label.
+ */
 function linkTitle(p: InventoryPage): string {
   const raw = p.title ?? p.h1 ?? p.url;
   const cleaned = clean(raw).replace(/\[/g, "(").replace(/\]/g, ")");
   return cleaned.length > 0 ? cleaned : p.url;
 }
 
-/** Unencoded ")" in a URL terminates the markdown link; percent-encode it. */
+/**
+ * Unencoded ")" in a URL terminates the markdown link; percent-encode it.
+ * @param url Absolute URL for the link target.
+ * @returns URL safe for markdown link syntax.
+ */
 function linkUrl(url: string): string {
   return url.replace(/\)/g, "%29").replace(/\(/g, "%28");
 }
@@ -19,6 +27,10 @@ function linkUrl(url: string): string {
 /**
  * The spec line format is `- [title](url): desc` — a description is always
  * required, so synthesize a minimal one from title/section when missing.
+ * @param p Page metadata to describe.
+ * @param section Current rendered section name.
+ * @param title Rendered link title.
+ * @returns Non-empty link description.
  */
 function linkDescription(p: InventoryPage, section: string, title: string): string {
   const desc = p.description ? clean(p.description) : "";
@@ -35,6 +47,12 @@ function pushLinks(lines: string[], pages: InventoryPage[], section: string): vo
 
 // Spec: H1 title, blockquote summary, optional free-form paragraphs, then
 // ## sections of `- [title](url): description`, with `## Optional` last.
+/**
+ * Render an inventory into llms.txt markdown.
+ * @param inv Inventory to render.
+ * @param summary Homepage summary shown in the blockquote.
+ * @returns Spec-shaped llms.txt content.
+ */
 export function render(inv: Inventory, summary: string): string {
   const lines: string[] = [];
   lines.push(`# ${clean(inv.siteName)}`);

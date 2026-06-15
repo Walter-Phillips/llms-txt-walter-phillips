@@ -1,5 +1,3 @@
-node_modules/
-
 .agents/
 .claude/
 .codex/
@@ -7,8 +5,12 @@ node_modules/
 .turbo/
 .wrangler/
 .next/
-coverage/
+
 dist/
 build/
+node_modules/
+*.generated.ts
+*.d.ts
+coverage/
 
 pnpm-lock.yaml

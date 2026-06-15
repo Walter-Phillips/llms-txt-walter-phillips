@@ -5,26 +5,26 @@ import {
   classifyConditionalGet,
   diffSitemap,
   hashChanged,
-  isRegenerationWorthy
+  isRegenerationWorthy,
 } from "./detect";
 
 describe("diffSitemap", () => {
   const stored = [
     { url: "https://example.com/", sitemapLastmod: "2026-01-01" },
     { url: "https://example.com/docs", sitemapLastmod: "2026-02-01" },
-    { url: "https://example.com/old", sitemapLastmod: null }
+    { url: "https://example.com/old", sitemapLastmod: null },
   ];
 
   it("detects added, removed, and lastmod-changed urls", () => {
     const current = [
       { url: "https://example.com/", lastmod: "2026-01-01" },
       { url: "https://example.com/docs", lastmod: "2026-03-15" },
-      { url: "https://example.com/new", lastmod: "2026-03-01" }
+      { url: "https://example.com/new", lastmod: "2026-03-01" },
     ];
     expect(diffSitemap(stored, current)).toEqual({
       added: ["https://example.com/new"],
       removed: ["https://example.com/old"],
-      lastmodChanged: ["https://example.com/docs"]
+      lastmodChanged: ["https://example.com/docs"],
     });
   });
 
@@ -32,7 +32,7 @@ describe("diffSitemap", () => {
     const current = [
       { url: "https://example.com/", lastmod: null },
       { url: "https://example.com/docs", lastmod: "2026-02-01" },
-      { url: "https://example.com/old", lastmod: "2026-06-01" } // stored has null
+      { url: "https://example.com/old", lastmod: "2026-06-01" }, // stored has null
     ];
     expect(diffSitemap(stored, current)).toEqual({ added: [], removed: [], lastmodChanged: [] });
   });
@@ -49,34 +49,34 @@ describe("classifyConditionalGet", () => {
 
   it("treats 304 as unchanged", () => {
     expect(classifyConditionalGet({ status: 304, etag: null, lastModified: null }, stored)).toBe(
-      "unchanged"
+      "unchanged",
     );
   });
 
   it("treats 404/410 as removed", () => {
     expect(classifyConditionalGet({ status: 404, etag: null, lastModified: null }, stored)).toBe(
-      "removed"
+      "removed",
     );
     expect(classifyConditionalGet({ status: 410, etag: null, lastModified: null }, stored)).toBe(
-      "removed"
+      "removed",
     );
   });
 
   it("treats 5xx and other 4xx as transient errors", () => {
     expect(classifyConditionalGet({ status: 503, etag: null, lastModified: null }, stored)).toBe(
-      "error"
+      "error",
     );
     expect(classifyConditionalGet({ status: 403, etag: null, lastModified: null }, stored)).toBe(
-      "error"
+      "error",
     );
   });
 
   it("cross-checks etag on a 200 from validator-ignoring servers", () => {
     expect(classifyConditionalGet({ status: 200, etag: '"abc"', lastModified: null }, stored)).toBe(
-      "unchanged"
+      "unchanged",
     );
     expect(classifyConditionalGet({ status: 200, etag: '"def"', lastModified: null }, stored)).toBe(
-      "modified"
+      "modified",
     );
   });
 
@@ -85,14 +85,14 @@ describe("classifyConditionalGet", () => {
     expect(
       classifyConditionalGet(
         { status: 200, etag: null, lastModified: "Mon, 01 Jan 2026 00:00:00 GMT" },
-        noEtag
-      )
+        noEtag,
+      ),
     ).toBe("unchanged");
     expect(
       classifyConditionalGet(
         { status: 200, etag: null, lastModified: "Tue, 02 Jan 2026 00:00:00 GMT" },
-        noEtag
-      )
+        noEtag,
+      ),
     ).toBe("modified");
   });
 
@@ -100,8 +100,8 @@ describe("classifyConditionalGet", () => {
     expect(
       classifyConditionalGet(
         { status: 200, etag: null, lastModified: null },
-        { etag: null, lastModified: null }
-      )
+        { etag: null, lastModified: null },
+      ),
     ).toBe("modified");
   });
 });
@@ -123,14 +123,14 @@ describe("buildChangeSet layering", () => {
         { url: "/docs", outcome: "modified" },
         { url: "/about", outcome: "removed" },
         { url: "/flaky", outcome: "error" },
-        { url: "/same", outcome: "unchanged" }
+        { url: "/same", outcome: "unchanged" },
       ],
-      hashes: [{ url: "/pricing", storedHash: "h1", currentHash: "h2" }]
+      hashes: [{ url: "/pricing", storedHash: "h1", currentHash: "h2" }],
     });
     expect(c).toEqual({
       added: ["/new"],
       removed: ["/about", "/gone"],
-      modified: ["/docs", "/pricing"]
+      modified: ["/docs", "/pricing"],
     });
   });
 
@@ -138,8 +138,8 @@ describe("buildChangeSet layering", () => {
     const c = buildChangeSet({
       conditional: [
         { url: "/a", outcome: "error" },
-        { url: "/b", outcome: "unchanged" }
-      ]
+        { url: "/b", outcome: "unchanged" },
+      ],
     });
     expect(c).toEqual(EMPTY_CHANGESET);
   });
@@ -147,7 +147,7 @@ describe("buildChangeSet layering", () => {
   it("added wins over removed/modified for the same url", () => {
     const c = buildChangeSet({
       sitemap: { added: ["/x"], removed: ["/x"], lastmodChanged: [] },
-      conditional: [{ url: "/x", outcome: "modified" }]
+      conditional: [{ url: "/x", outcome: "modified" }],
     });
     expect(c).toEqual({ added: ["/x"], removed: [], modified: [] });
   });
@@ -157,7 +157,7 @@ describe("buildChangeSet layering", () => {
     // it had a body-hash verdict, so the equal hash keeps the url out entirely.
     const c = buildChangeSet({
       conditional: [{ url: "/p", outcome: "unchanged" }],
-      hashes: [{ url: "/p", storedHash: "h1", currentHash: "h1" }]
+      hashes: [{ url: "/p", storedHash: "h1", currentHash: "h1" }],
     });
     expect(c).toEqual(EMPTY_CHANGESET);
   });
@@ -165,7 +165,7 @@ describe("buildChangeSet layering", () => {
   it("a changed content hash marks the url modified", () => {
     const c = buildChangeSet({
       conditional: [{ url: "/p", outcome: "unchanged" }],
-      hashes: [{ url: "/p", storedHash: "h1", currentHash: "h2" }]
+      hashes: [{ url: "/p", storedHash: "h1", currentHash: "h2" }],
     });
     expect(c).toEqual({ added: [], removed: [], modified: ["/p"] });
   });
@@ -173,7 +173,7 @@ describe("buildChangeSet layering", () => {
   it("removed wins over modified for the same url", () => {
     const c = buildChangeSet({
       sitemap: { added: [], removed: ["/y"], lastmodChanged: [] },
-      conditional: [{ url: "/y", outcome: "modified" }]
+      conditional: [{ url: "/y", outcome: "modified" }],
     });
     expect(c).toEqual({ added: [], removed: ["/y"], modified: [] });
   });

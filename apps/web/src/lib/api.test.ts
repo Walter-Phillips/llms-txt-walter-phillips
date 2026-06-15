@@ -9,7 +9,7 @@ const site = {
   checkIntervalS: 21600,
   nextCheckAt: null,
   changeStreak: 0,
-  createdAt: 1_781_078_400
+  createdAt: 1_781_078_400,
 };
 
 describe("web API client", () => {
@@ -27,8 +27,8 @@ describe("web API client", () => {
     const fetchMock = vi.fn().mockResolvedValue(
       Response.json({
         siteId: "site_acme-dev",
-        runId: "run_acme-dev_1"
-      })
+        runId: "run_acme-dev_1",
+      }),
     );
     vi.stubGlobal("fetch", fetchMock);
 
@@ -38,8 +38,8 @@ describe("web API client", () => {
       "http://localhost:8787/api/sites",
       expect.objectContaining({
         method: "POST",
-        body: JSON.stringify({ url: "https://acme.dev" })
-      })
+        body: JSON.stringify({ url: "https://acme.dev" }),
+      }),
     );
   });
 
@@ -53,15 +53,15 @@ describe("web API client", () => {
       "http://localhost:8787/api/sites/site_acme-dev/monitoring",
       expect.objectContaining({
         method: "PATCH",
-        body: JSON.stringify({ enabled: true })
-      })
+        body: JSON.stringify({ enabled: true }),
+      }),
     );
   });
 
   it("encodes origins in hosted file URLs", () => {
     expect(normalizeWebsiteUrl("acme.dev")).toBe("https://acme.dev");
     expect(hostedFileUrl("https://acme.dev")).toBe(
-      "http://localhost:8787/sites/https%3A%2F%2Facme.dev/llms.txt"
+      "http://localhost:8787/sites/https%3A%2F%2Facme.dev/llms.txt",
     );
   });
 });

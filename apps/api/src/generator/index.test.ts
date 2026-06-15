@@ -1,16 +1,17 @@
 import { crawlRuns, fileVersions, pages, sites } from "@profound-takehome/db";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { Environment } from "../bindings";
 import type { Inventory } from "./heuristics";
 import { refine } from "./llm";
 import { generate } from "./index";
-import { createTestEnv, FakeDb } from "../test-helpers";
+import { createTestEnv as createTestEnvironment, FakeDb as FakeDatabase } from "../test-helpers";
 
 vi.mock("drizzle-orm/d1", () => ({
-  drizzle: vi.fn((db) => db)
+  drizzle: vi.fn((db: D1Database): D1Database => db),
 }));
 
 vi.mock("./llm", () => ({
-  refine: vi.fn()
+  refine: vi.fn(),
 }));
 
 const site = {
@@ -20,7 +21,7 @@ const site = {
   checkIntervalS: 86400,
   nextCheckAt: null,
   changeStreak: 0,
-  createdAt: 1
+  createdAt: 1,
 };
 
 const run = {
@@ -32,7 +33,7 @@ const run = {
   pagesCrawled: 2,
   pagesChanged: 0,
   startedAt: 100,
-  finishedAt: null
+  finishedAt: null,
 };
 
 const pageRows = [
@@ -46,7 +47,7 @@ const pageRows = [
     snippet: null,
     sectionHint: null,
     status: "active",
-    lastSeenAt: 120
+    lastSeenAt: 120,
   },
   {
     id: "page_docs",
@@ -58,11 +59,11 @@ const pageRows = [
     snippet: null,
     sectionHint: null,
     status: "active",
-    lastSeenAt: 120
-  }
+    lastSeenAt: 120,
+  },
 ];
 
-function queueFreshGeneration(db: FakeDb, latest: { version: number } | undefined = undefined) {
+function queueFreshGeneration(db: FakeDatabase, latest?: { version: number }): void {
   db.queueSelect(sites, site);
   db.queueSelect(fileVersions, undefined);
   db.queueSelect(crawlRuns, run);
@@ -71,9 +72,14 @@ function queueFreshGeneration(db: FakeDb, latest: { version: number } | undefine
   db.queueSelect(fileVersions, latest);
 }
 
-function createEnvWithPut(db: FakeDb) {
-  const put = vi.fn(async (_key: string, _content: string, _options?: unknown) => undefined);
-  const env = createTestEnv(db, { FILES: { put } as unknown as R2Bucket });
+function createEnvironmentWithPut(db: FakeDatabase): {
+  env: Environment;
+  put: ReturnType<typeof vi.fn<(key: string, content: string, options?: unknown) => Promise<void>>>;
+} {
+  const put = vi.fn((_key: string, _content: string, _options?: unknown) =>
+    Promise.resolve(undefined),
+  );
+  const env = createTestEnvironment(db, { FILES: { put } as unknown as R2Bucket });
   return { env, put };
 }
 
@@ -83,57 +89,52 @@ describe("generate", () => {
   });
 
   it("returns an existing version for the run without publishing again", async () => {
-    const db = new FakeDb();
+    const db = new FakeDatabase();
     db.queueSelect(sites, site);
     db.queueSelect(fileVersions, { version: 2, r2Key: "site_1/v2.txt" });
-    const { env, put } = createEnvWithPut(db);
+    const { env, put } = createEnvironmentWithPut(db);
 
     const result = await generate(env, site.id, run.id);
 
     expect(result).toEqual({ version: 2, r2Key: "site_1/v2.txt" });
     expect(put).not.toHaveBeenCalled();
-    expect(db.updates).toEqual([
-      {
-        table: "crawlRuns",
-        values: { status: "done", finishedAt: expect.any(Number) }
-      }
-    ]);
+    expect(db.updates).toHaveLength(1);
+    expect(db.updates[0]?.table).toBe("crawlRuns");
+    expect(db.updates[0]?.values.status).toBe("done");
+    expect(typeof db.updates[0]?.values.finishedAt).toBe("number");
   });
 
   it("publishes Pass 1 content when LLM refinement throws", async () => {
     vi.spyOn(console, "warn").mockImplementation(() => undefined);
     vi.mocked(refine).mockRejectedValue(new Error("llm down"));
-    const db = new FakeDb();
+    const db = new FakeDatabase();
     queueFreshGeneration(db);
-    const { env, put } = createEnvWithPut(db);
+    const { env, put } = createEnvironmentWithPut(db);
 
     const result = await generate(env, site.id, run.id);
 
     expect(result).toEqual({ version: 1, r2Key: "site_1/v1.txt" });
     expect(put).toHaveBeenCalledTimes(1);
     expect(put).toHaveBeenCalledWith("site_1/v1.txt", expect.stringContaining("## Documentation"), {
-      httpMetadata: { contentType: "text/plain; charset=utf-8" }
+      httpMetadata: { contentType: "text/plain; charset=utf-8" },
     });
-    expect(db.inserts).toEqual([
-      {
-        table: "fileVersions",
-        values: expect.objectContaining({
-          siteId: site.id,
-          runId: run.id,
-          version: 1,
-          r2Key: "site_1/v1.txt",
-          changeSummary: "initial generation",
-          generatedBy: "heuristic"
-        })
-      }
-    ]);
+    expect(db.inserts).toHaveLength(1);
+    expect(db.inserts[0]?.table).toBe("fileVersions");
+    expect(db.inserts[0]?.values).toMatchObject({
+      siteId: site.id,
+      runId: run.id,
+      version: 1,
+      r2Key: "site_1/v1.txt",
+      changeSummary: "initial generation",
+      generatedBy: "heuristic",
+    });
   });
 
   it("publishes Pass 1 content when LLM refinement returns null", async () => {
     vi.mocked(refine).mockResolvedValue(null);
-    const db = new FakeDb();
+    const db = new FakeDatabase();
     queueFreshGeneration(db);
-    const { env, put } = createEnvWithPut(db);
+    const { env, put } = createEnvironmentWithPut(db);
 
     const result = await generate(env, site.id, run.id);
 
@@ -147,8 +148,8 @@ describe("generate", () => {
         runId: run.id,
         version: 1,
         r2Key: "site_1/v1.txt",
-        generatedBy: "heuristic"
-      }
+        generatedBy: "heuristic",
+      },
     });
   });
 
@@ -166,50 +167,50 @@ describe("generate", () => {
               title: "Developer Docs",
               description: "Refined developer documentation.",
               h1: "Docs",
-              sectionHint: "For Developers"
-            }
-          ]
-        }
+              sectionHint: "For Developers",
+            },
+          ],
+        },
       ],
-      optional: []
+      optional: [],
     };
     vi.mocked(refine).mockResolvedValue({
       inventory: refinedInventory,
-      summary: "Refined summary."
+      summary: "Refined summary.",
     });
-    const db = new FakeDb();
+    const db = new FakeDatabase();
     queueFreshGeneration(db);
-    const { env, put } = createEnvWithPut(db);
+    const { env, put } = createEnvironmentWithPut(db);
 
     await generate(env, site.id, run.id);
 
     expect(put).toHaveBeenCalledTimes(1);
-    const content = put.mock.calls[0]?.[1] as string;
+    const content = put.mock.calls[0]?.[1];
     expect(content).toContain("# Refined Example");
     expect(content).toContain("> Refined summary.");
     expect(content).toContain("## For Developers");
     expect(content).not.toContain("## Documentation");
     expect(db.inserts[0]).toMatchObject({
       table: "fileVersions",
-      values: { generatedBy: "llm-refined" }
+      values: { generatedBy: "llm-refined" },
     });
   });
 
   it("increments from the latest existing version for the site", async () => {
     vi.mocked(refine).mockResolvedValue(null);
-    const db = new FakeDb();
+    const db = new FakeDatabase();
     queueFreshGeneration(db, { version: 2 });
-    const { env, put } = createEnvWithPut(db);
+    const { env, put } = createEnvironmentWithPut(db);
 
     const result = await generate(env, site.id, run.id);
 
     expect(result).toEqual({ version: 3, r2Key: "site_1/v3.txt" });
     expect(put).toHaveBeenCalledWith("site_1/v3.txt", expect.any(String), {
-      httpMetadata: { contentType: "text/plain; charset=utf-8" }
+      httpMetadata: { contentType: "text/plain; charset=utf-8" },
     });
     expect(db.inserts[0]).toMatchObject({
       table: "fileVersions",
-      values: { siteId: site.id, runId: run.id, version: 3, r2Key: "site_1/v3.txt" }
+      values: { siteId: site.id, runId: run.id, version: 3, r2Key: "site_1/v3.txt" },
     });
   });
 });
