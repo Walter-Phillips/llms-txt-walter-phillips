@@ -98,7 +98,7 @@ export default tseslint.config(
       // Imports & hygiene
       "unicorn/prefer-module": "error",
       "no-duplicate-imports": "error",
-      "no-console": ["warn", { allow: ["warn", "error"] }],
+      "no-console": ["warn", { allow: ["info", "warn", "error"] }],
       "no-debugger": "error",
       eqeqeq: ["error", "always"],
       "prefer-const": "error",

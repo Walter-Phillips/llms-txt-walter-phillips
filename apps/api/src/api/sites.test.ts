@@ -1,6 +1,6 @@
 import { sites } from "@profound-takehome/db";
 import { Hono } from "hono";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Environment } from "../bindings";
 import { createTestEnvironment, FakeDatabase } from "../test-helpers";
 import { sitesRouter } from "./sites";
@@ -45,6 +45,11 @@ describe("sitesRouter", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.useRealTimers();
+    vi.spyOn(console, "info").mockImplementation(() => undefined);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   it("rejects an invalid URL", async () => {

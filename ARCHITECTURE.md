@@ -22,7 +22,11 @@ Top-level map for the llms.txt generator.
 
 - Validation: zod at the HTTP boundary, drizzle types internally.
 - Secrets: `wrangler secret` for the Worker; Vercel env for the web.
-- Observability: `wrangler tail`, `observability.enabled = true` in wrangler.toml.
+- Observability: Pino emits structured JSON logs through `console.*`; Cloudflare
+  Workers Logs are enabled with `observability.enabled = true` in wrangler.toml.
+  Optional `SENTRY_DSN` enables Sentry error tracking, and optional
+  `AXIOM_TOKEN` + `AXIOM_DATASET` forwards Pino records to Axiom with
+  `ctx.waitUntil`.
 
 ## Enforcement
 

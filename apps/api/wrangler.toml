@@ -56,7 +56,10 @@ class_name = "SiteCoordinator"
 tag = "v1"
 new_sqlite_classes = ["SiteCoordinator"]
 
-# Anthropic API key set via: `wrangler secret put ANTHROPIC_API_KEY`
+# Secrets:
+#   wrangler secret put ANTHROPIC_API_KEY
+#   wrangler secret put SENTRY_DSN
+#   wrangler secret put AXIOM_TOKEN
 
 # Cron: every 15 minutes, enqueue monitor jobs for due sites.
 [triggers]
@@ -64,4 +67,8 @@ crons = ["*/15 * * * *"]
 
 [vars]
 APP_ORIGIN = "https://llms-txt.example.com"
+# SENTRY_TRACES_SAMPLE_RATE = "0"
+# AXIOM_DATASET = "llms-txt-prod"
+# AXIOM_EDGE_URL = "https://your-region.edge.axiom.co"
+# AXIOM_ORG_ID = "org_xxxxxxxxxx"
 # RATE_LIMIT_ENABLED = "1"

@@ -17,7 +17,13 @@ export interface Environment {
   SITE_COORDINATOR: DurableObjectNamespace;
   ANTHROPIC_API_KEY: string;
   APP_ORIGIN: string;
+  AXIOM_DATASET?: string;
+  AXIOM_EDGE_URL?: string;
+  AXIOM_ORG_ID?: string;
+  AXIOM_TOKEN?: string;
   RATE_LIMIT_ENABLED?: string;
+  SENTRY_DSN?: string;
+  SENTRY_TRACES_SAMPLE_RATE?: string;
 }
 
 export type { Environment as Env };

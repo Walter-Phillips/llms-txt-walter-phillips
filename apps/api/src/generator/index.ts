@@ -3,6 +3,8 @@ import { and, desc, eq, gte } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { crawlRuns, fileVersions, pages, sites } from "@profound-takehome/db";
 import type { Environment } from "../bindings";
+import { logInfo, logWarn } from "../observability/logger";
+import { captureHandledException } from "../observability/sentry";
 import { buildInventory, type Inventory } from "./heuristics";
 import { render } from "./render";
 import { validate } from "./validate";
@@ -102,12 +104,30 @@ async function refinedRender(
     const content = render(refined.inventory, refined.summary);
     const refinedCheck = validate(content, origin);
     if (refinedCheck.ok) return content;
-    console.warn("generate: refined output failed validation, shipping pass 1", {
+    logWarn("generation_refinement_validation_failed", {
+      workflow: "generation",
+      step: "llm_refine",
+      outcome: "fallback",
       siteId: ctx.siteId,
+      runId: ctx.runId,
       errors: refinedCheck.errors,
     });
   } catch (err) {
-    console.warn("generate: LLM refinement failed, shipping pass 1", { siteId: ctx.siteId, err });
+    captureHandledException(err, {
+      workflow: "generation",
+      step: "llm_refine",
+      outcome: "fallback",
+      siteId: ctx.siteId,
+      runId: ctx.runId,
+    });
+    logWarn("generation_refinement_failed", {
+      workflow: "generation",
+      step: "llm_refine",
+      outcome: "fallback",
+      siteId: ctx.siteId,
+      runId: ctx.runId,
+      error: err instanceof Error ? err : new Error(String(err)),
+    });
   }
   return null;
 }
@@ -149,6 +169,15 @@ async function publishVersion(
     createdAt: Math.floor(Date.now() / 1000),
   });
 
+  logInfo("generation_version_published", {
+    workflow: "generation",
+    step: "publish",
+    outcome: "published",
+    siteId: ctx.siteId,
+    runId: ctx.runId,
+    version,
+    generatedBy: rendered.generatedBy,
+  });
   return { version, r2Key };
 }
 
@@ -202,6 +231,14 @@ export async function generate(
   const alreadyPublished = await existingGeneration(ctx);
   if (alreadyPublished) {
     await finishRun(ctx);
+    logInfo("generation_duplicate_skipped", {
+      workflow: "generation",
+      step: "publish",
+      outcome: "already_published",
+      siteId,
+      runId,
+      version: alreadyPublished.version,
+    });
     return alreadyPublished;
   }
 
@@ -217,5 +254,13 @@ export async function generate(
 
   const result = await publishWithDuplicateGuard(ctx, rendered, changeSummary);
   await finishRun(ctx);
+  logInfo("generation_completed", {
+    workflow: "generation",
+    step: "generate",
+    outcome: "completed",
+    siteId,
+    runId,
+    version: result.version,
+  });
   return result;
 }

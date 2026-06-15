@@ -18,6 +18,8 @@ import {
   type SitemapEntry,
 } from "../monitor/detect";
 import { nextInterval, nextStreak } from "../monitor/schedule";
+import { logError, logInfo } from "../observability/logger";
+import { captureHandledException } from "../observability/sentry";
 
 /** Hard cap on outbound requests per check (sitemap fetch excluded). */
 const MAX_CONDITIONAL_GETS = 30;
@@ -65,7 +67,23 @@ export async function handleMonitorBatch(
       await checkSite(env, message.body.siteId);
       message.ack();
     } catch (err) {
-      console.error("monitor handler failed", message.body, err);
+      captureHandledException(err, {
+        workflow: "monitor",
+        step: "queue_message",
+        outcome: "retry",
+        queue: batch.queue,
+        messageType: message.body.type,
+        siteId: message.body.siteId,
+      });
+      logError("monitor_message_failed", {
+        workflow: "monitor",
+        step: "queue_message",
+        outcome: "retry",
+        queue: batch.queue,
+        messageType: message.body.type,
+        siteId: message.body.siteId,
+        error: err instanceof Error ? err : new Error(String(err)),
+      });
       message.retry();
     }
   }
@@ -156,6 +174,17 @@ async function enqueueMonitorCrawl(input: {
     siteId: input.siteId,
     url: input.domain,
   });
+  logInfo("monitor_crawl_queued", {
+    workflow: "monitor",
+    step: "enqueue_crawl",
+    outcome: "queued",
+    siteId: input.siteId,
+    runId,
+    domain: input.domain,
+    addedCount: input.changes.added.length,
+    removedCount: input.changes.removed.length,
+    modifiedCount: input.changes.modified.length,
+  });
 }
 
 async function advanceMonitorCadence(input: {
@@ -176,12 +205,30 @@ async function advanceMonitorCadence(input: {
       changeStreak: nextStreak(input.changeStreak, input.changesFound),
     })
     .where(eq(sites.id, input.siteId));
+  logInfo("monitor_cadence_advanced", {
+    workflow: "monitor",
+    step: "cadence",
+    outcome: "updated",
+    siteId: input.siteId,
+    changesFound: input.changesFound,
+    previousIntervalS: input.checkIntervalS,
+    nextIntervalS: interval,
+  });
 }
 
 async function checkSite(env: Environment, siteId: string): Promise<void> {
   const db = drizzle(env.DB);
   const site = await db.select().from(sites).where(eq(sites.id, siteId)).get();
-  if (!site?.monitoring) return; // unregistered or paused — drop quietly
+  if (!site?.monitoring) {
+    logInfo("monitor_site_skipped", {
+      workflow: "monitor",
+      step: "check",
+      outcome: "skipped",
+      siteId,
+      reason: site ? "paused" : "missing",
+    });
+    return;
+  }
 
   const activePages = await loadActivePages(db, siteId);
   const robots = await fetchRobots(site.domain);
@@ -194,6 +241,19 @@ async function checkSite(env: Environment, siteId: string): Promise<void> {
   if (changesFound) {
     await enqueueMonitorCrawl({ db, env, siteId, domain: site.domain, changes, now });
   }
+  logInfo("monitor_site_checked", {
+    workflow: "monitor",
+    step: "check",
+    outcome: changesFound ? "changes_found" : "unchanged",
+    siteId,
+    domain: site.domain,
+    activePageCount: activePages.length,
+    sitemapEntryCount: sitemap?.length ?? 0,
+    addedCount: changes.added.length,
+    removedCount: changes.removed.length,
+    modifiedCount: changes.modified.length,
+    conditionalErrorCount: signals.conditional.filter((check) => check.outcome === "error").length,
+  });
   await advanceMonitorCadence({
     db,
     siteId,

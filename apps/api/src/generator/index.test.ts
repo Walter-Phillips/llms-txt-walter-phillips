@@ -1,5 +1,5 @@
 import { crawlRuns, fileVersions, pages, sites } from "@profound-takehome/db";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Environment } from "../bindings";
 import type { Inventory } from "./heuristics";
 import { refine } from "./llm";
@@ -86,6 +86,12 @@ function createEnvironmentWithPut(db: FakeDatabase): {
 describe("generate", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.spyOn(console, "info").mockImplementation(() => undefined);
+    vi.spyOn(console, "warn").mockImplementation(() => undefined);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   it("returns an existing version for the run without publishing again", async () => {
@@ -105,7 +111,6 @@ describe("generate", () => {
   });
 
   it("publishes Pass 1 content when LLM refinement throws", async () => {
-    vi.spyOn(console, "warn").mockImplementation(() => undefined);
     vi.mocked(refine).mockRejectedValue(new Error("llm down"));
     const db = new FakeDatabase();
     queueFreshGeneration(db);

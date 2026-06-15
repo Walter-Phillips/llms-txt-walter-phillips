@@ -6,6 +6,7 @@ import type { CrawlMessage, Environment } from "../bindings";
 import { isHtml, politeFetch, type FetchResult } from "../crawler/fetcher";
 import { extract } from "../crawler/extract";
 import { classify } from "../generator/heuristics";
+import { logInfo, logWarn, urlFields } from "../observability/logger";
 
 type Database = ReturnType<typeof drizzle>;
 type PageMessage = Extract<CrawlMessage, { type: "page" }>;
@@ -21,6 +22,23 @@ interface StoredPage {
   id: string;
   etag: string | null;
   lastModified: string | null;
+}
+
+function logPageOutcome(
+  message: PageMessage,
+  outcome: string,
+  fields: Record<string, string | number | boolean | null> = {},
+): void {
+  logInfo("crawl_page_fetched", {
+    workflow: "crawl",
+    step: "page_fetch",
+    outcome,
+    siteId: message.siteId,
+    runId: message.runId,
+    depth: message.depth,
+    ...urlFields(message.url),
+    ...fields,
+  });
 }
 
 async function getStoredPage(db: Database, message: PageMessage): Promise<StoredPage | undefined> {
@@ -101,10 +119,26 @@ async function handleFetchResponse(
 ): Promise<string[] | undefined> {
   if (response.status === 304) {
     await markPageActive(writeInput);
+    logPageOutcome(writeInput.message, "unchanged", { status: response.status });
   } else if (response.status === 200 && response.body && isHtml(response.contentType)) {
-    return await persistHtmlPage({ ...writeInput, body: response.body, response });
+    const links = await persistHtmlPage({ ...writeInput, body: response.body, response });
+    logPageOutcome(writeInput.message, "active", {
+      status: response.status,
+      linkCount: links.length,
+    });
+    return links;
   } else {
     await markPageError(writeInput);
+    logWarn("crawl_page_fetch_unusable", {
+      workflow: "crawl",
+      step: "page_fetch",
+      outcome: "page_error",
+      siteId: writeInput.message.siteId,
+      runId: writeInput.message.runId,
+      status: response.status,
+      contentType: response.contentType,
+      ...urlFields(writeInput.message.url),
+    });
   }
   return undefined;
 }
@@ -134,6 +168,14 @@ export async function fetchAndPersistPage(input: {
   } catch {
     // Fetch/extract failure for one page must not fail the run.
     await markPageError(writeInput);
+    logWarn("crawl_page_fetch_failed", {
+      workflow: "crawl",
+      step: "page_fetch",
+      outcome: "page_error",
+      siteId: input.message.siteId,
+      runId: input.message.runId,
+      ...urlFields(input.message.url),
+    });
   }
   return undefined;
 }
@@ -172,5 +214,15 @@ export async function enqueueGeneratedRun(input: {
     type: "generate",
     runId: input.message.runId,
     siteId: input.message.siteId,
+  });
+  logInfo("crawl_generation_queued", {
+    workflow: "crawl",
+    step: "enqueue_generation",
+    outcome: "queued",
+    siteId: input.message.siteId,
+    runId: input.message.runId,
+    pagesFound: input.completion.pagesFound,
+    pagesCrawled: input.completion.pagesCrawled,
+    capped: input.completion.capped,
   });
 }

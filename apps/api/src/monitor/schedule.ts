@@ -2,6 +2,7 @@ import { drizzle } from "drizzle-orm/d1";
 import { and, eq, lte } from "drizzle-orm";
 import { sites } from "@profound-takehome/db";
 import type { Environment } from "../bindings";
+import { logInfo } from "../observability/logger";
 
 /**
  * Cron entry point: find sites due for a monitor check and enqueue them.
@@ -19,11 +20,25 @@ export async function enqueueDueMonitorJobs(env: Environment): Promise<void> {
     .where(and(eq(sites.monitoring, 1), lte(sites.nextCheckAt, now)))
     .limit(100);
 
-  if (due.length === 0) return;
+  if (due.length === 0) {
+    logInfo("monitor_due_sites_scanned", {
+      workflow: "monitor",
+      step: "cron_enqueue",
+      outcome: "none_due",
+      dueCount: 0,
+    });
+    return;
+  }
 
   await env.MONITOR_QUEUE.sendBatch(
     due.map((s) => ({ body: { type: "check" as const, siteId: s.id } })),
   );
+  logInfo("monitor_due_sites_enqueued", {
+    workflow: "monitor",
+    step: "cron_enqueue",
+    outcome: "queued",
+    dueCount: due.length,
+  });
 }
 
 const HOUR = 3600;

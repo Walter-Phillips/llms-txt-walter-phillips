@@ -1,7 +1,7 @@
 {
   "extends": "@profound-takehome/config/tsconfig/base",
   "compilerOptions": {
-    "types": ["@cloudflare/workers-types"]
+    "types": ["@cloudflare/workers-types", "node"]
   },
   "include": ["src/**/*.ts", "src/**/*.test.ts"]
 }

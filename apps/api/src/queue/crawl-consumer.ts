@@ -5,6 +5,8 @@ import type { CrawlMessage, Environment } from "../bindings";
 import { fetchRobots } from "../crawler/robots";
 import { discoverSitemapEntries } from "../crawler/sitemap";
 import { generate } from "../generator";
+import { logError, logInfo } from "../observability/logger";
+import { captureHandledException } from "../observability/sentry";
 import type {
   CompleteRequest,
   CompleteResponse,
@@ -87,11 +89,37 @@ async function failRunAfterEnqueueFailure(input: EnqueueFailureInput): Promise<v
   try {
     await doCall(stub, "/finish", { runId, phase: "error" });
   } catch (finishError) {
-    console.error("failed to mark DO run error after enqueue failure", {
+    captureHandledException(finishError, {
+      workflow: "crawl",
+      step: "enqueue",
+      outcome: "failed",
       runId,
-      finishErr: finishError,
+      context: input.context,
+    });
+    logError("crawl_enqueue_failure_finish_failed", {
+      workflow: "crawl",
+      step: "enqueue",
+      outcome: "failed",
+      runId,
+      context: input.context,
+      error: finishError instanceof Error ? finishError : new Error(String(finishError)),
     });
   }
+  captureHandledException(input.error, {
+    workflow: "crawl",
+    step: "enqueue",
+    outcome: "run_error",
+    runId,
+    context: input.context,
+  });
+  logError("crawl_enqueue_failed", {
+    workflow: "crawl",
+    step: "enqueue",
+    outcome: "run_error",
+    runId,
+    context: input.context,
+    error: input.error instanceof Error ? input.error : new Error(String(input.error)),
+  });
 }
 
 async function seedFrontier(input: {
@@ -132,6 +160,37 @@ async function enqueueSeededPages(input: {
   }
 }
 
+function logDiscoverySkipped(message: DiscoverMessage, origin: string): void {
+  logInfo("crawl_discovery_skipped", {
+    workflow: "crawl",
+    step: "discovery",
+    outcome: "skipped",
+    siteId: message.siteId,
+    runId: message.runId,
+    domain: origin,
+  });
+}
+
+function logDiscoveryCompleted(input: {
+  message: DiscoverMessage;
+  origin: string;
+  discoveryMethod: string;
+  sitemapEntryCount: number;
+  acceptedCount: number;
+}): void {
+  logInfo("crawl_discovery_completed", {
+    workflow: "crawl",
+    step: "discovery",
+    outcome: "completed",
+    siteId: input.message.siteId,
+    runId: input.message.runId,
+    domain: input.origin,
+    discoveryMethod: input.discoveryMethod,
+    sitemapEntryCount: input.sitemapEntryCount,
+    acceptedCount: input.acceptedCount,
+  });
+}
+
 async function handleDiscover(env: Environment, message: DiscoverMessage): Promise<void> {
   const db = drizzle(env.DB);
   const now = Math.floor(Date.now() / 1000);
@@ -158,7 +217,10 @@ async function handleDiscover(env: Environment, message: DiscoverMessage): Promi
     discoveryMethod,
     useSitemap,
   });
-  if (!claimed) return;
+  if (!claimed) {
+    logDiscoverySkipped(message, origin);
+    return;
+  }
 
   const seeded = await seedFrontier({ stub, message, origin, useSitemap, entries });
 
@@ -175,6 +237,13 @@ async function handleDiscover(env: Environment, message: DiscoverMessage): Promi
   }
 
   await markRunCrawling({ db, message, discoveryMethod, accepted: seeded.accepted, now });
+  logDiscoveryCompleted({
+    message,
+    origin,
+    discoveryMethod,
+    sitemapEntryCount: entries.length,
+    acceptedCount: seeded.accepted.length,
+  });
 
   // Set the adaptive-cadence prior only on a site's first crawl. Monitor and
   // manual re-crawls must not clobber an interval the feedback loop has tuned.
@@ -231,10 +300,31 @@ async function handleGenerate(
   const db = drizzle(env.DB);
   const stub = coordinator(env, message.siteId);
   try {
+    logInfo("crawl_generation_started", {
+      workflow: "generation",
+      step: "queue_message",
+      outcome: "started",
+      siteId: message.siteId,
+      runId: message.runId,
+    });
     const run = await db.select().from(crawlRuns).where(eq(crawlRuns.id, message.runId)).get();
     await generate(env, message.siteId, message.runId, run?.changeSummary ?? undefined);
     await doCall(stub, "/finish", { runId: message.runId, phase: "done" });
+    logInfo("crawl_generation_completed", {
+      workflow: "generation",
+      step: "queue_message",
+      outcome: "completed",
+      siteId: message.siteId,
+      runId: message.runId,
+    });
   } catch (err) {
+    captureHandledException(err, {
+      workflow: "generation",
+      step: "queue_message",
+      outcome: "run_error",
+      siteId: message.siteId,
+      runId: message.runId,
+    });
     await db
       .update(crawlRuns)
       .set({
@@ -244,6 +334,14 @@ async function handleGenerate(
       })
       .where(eq(crawlRuns.id, message.runId));
     await doCall(stub, "/finish", { runId: message.runId, phase: "error" });
+    logError("crawl_generation_failed", {
+      workflow: "generation",
+      step: "queue_message",
+      outcome: "run_error",
+      siteId: message.siteId,
+      runId: message.runId,
+      error: err instanceof Error ? err : new Error(String(err)),
+    });
   }
 }
 
@@ -273,7 +371,25 @@ export async function handleCrawlBatch(
       }
       message.ack();
     } catch (err) {
-      console.error("crawl handler failed", message.body, err);
+      captureHandledException(err, {
+        workflow: "crawl",
+        step: "queue_message",
+        outcome: "retry",
+        queue: batch.queue,
+        messageType: message.body.type,
+        siteId: message.body.siteId,
+        runId: message.body.runId,
+      });
+      logError("crawl_message_failed", {
+        workflow: "crawl",
+        step: "queue_message",
+        outcome: "retry",
+        queue: batch.queue,
+        messageType: message.body.type,
+        siteId: message.body.siteId,
+        runId: message.body.runId,
+        error: err instanceof Error ? err : new Error(String(err)),
+      });
       message.retry();
     }
   }

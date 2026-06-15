@@ -17,17 +17,21 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.32.0",
+    "@axiomhq/js": "^1.6.1",
     "@profound-takehome/db": "workspace:*",
     "@profound-takehome/shared": "workspace:*",
+    "@sentry/cloudflare": "^10.57.0",
     "drizzle-orm": "^0.45.2",
     "hono": "^4.6.0",
     "nanoid": "^5.0.0",
+    "pino": "^10.3.1",
     "zod": "^3.24.0"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20250101.0",
     "@eslint/js": "^9",
     "@profound-takehome/config": "workspace:*",
+    "@types/node": "^22.0.0",
     "eslint": "^9.0.0",
     "eslint-plugin-jsdoc": "^50",
     "eslint-plugin-unicorn": "^55",

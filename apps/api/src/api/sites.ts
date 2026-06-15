@@ -6,6 +6,7 @@ import { desc, eq } from "drizzle-orm";
 import { sites, crawlRuns, pages, fileVersions } from "@profound-takehome/db";
 import type { Environment } from "../bindings";
 import { normalizeOrigin } from "../lib/url";
+import { logInfo } from "../observability/logger";
 import { computeDiff, listVersions } from "./files";
 
 export const sitesRouter = new Hono<{ Bindings: Environment }>();
@@ -46,6 +47,15 @@ sitesRouter.post("/", async (c) => {
   });
 
   await c.env.CRAWL_QUEUE.send({ type: "discover", runId, siteId, url: origin });
+  logInfo("crawl_run_queued", {
+    workflow: "crawl",
+    step: "api_enqueue",
+    outcome: "queued",
+    trigger: existing ? "manual" : "initial",
+    siteId,
+    runId,
+    domain: origin,
+  });
 
   return c.json({ siteId, runId });
 });
@@ -91,6 +101,14 @@ sitesRouter.patch("/:id/monitoring", async (c) => {
     .where(eq(sites.id, site.id));
 
   const updated = await db.select().from(sites).where(eq(sites.id, site.id)).get();
+  logInfo("monitoring_toggled", {
+    workflow: "monitor",
+    step: "toggle",
+    outcome: "updated",
+    siteId: site.id,
+    domain: site.domain,
+    enabled: body.data.enabled,
+  });
   return c.json({ site: updated });
 });
 
