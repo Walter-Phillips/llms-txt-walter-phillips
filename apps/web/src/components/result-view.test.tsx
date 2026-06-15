@@ -1,5 +1,5 @@
 import type { Site } from "@profound-takehome/shared";
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, expect, it, vi } from "vitest";
 import { ResultView } from "./result-view";
 import type * as ApiModule from "@/lib/api";
@@ -10,6 +10,7 @@ const { apiMock } = vi.hoisted(() => ({
     getLlmsTxt: vi.fn(),
     setMonitoring: vi.fn(),
     getPages: vi.fn(),
+    getVersions: vi.fn(),
   },
 }));
 
@@ -31,20 +32,27 @@ const site: Site = {
 
 const CONTENT = `# Acme\n\n> Acme builds developer tooling.\n\n## Docs\n\n- [Quickstart](https://acme.dev/docs/quickstart): Ship fast\n`;
 
+function makeVersion(version: number) {
+  return {
+    id: `ver_${String(version)}`,
+    siteId: site.id,
+    runId: "run_1",
+    version,
+    r2Key: `https://acme.dev/llms.txt/v${String(version)}`,
+    changeSummary: "1 page added",
+    createdAt: Date.now(),
+  };
+}
+
 beforeEach(() => {
   vi.stubEnv("NEXT_PUBLIC_API_URL", "http://localhost:8787");
   apiMock.getSite.mockReset().mockResolvedValue({
     site,
-    latestVersion: {
-      id: "ver_1",
-      siteId: site.id,
-      runId: "run_1",
-      version: 3,
-      r2Key: "https://acme.dev/llms.txt/v3",
-      changeSummary: "1 page added",
-      createdAt: Date.now(),
-    },
+    latestVersion: makeVersion(3),
   });
+  apiMock.getVersions
+    .mockReset()
+    .mockResolvedValue({ versions: [makeVersion(3), makeVersion(2), makeVersion(1)] });
   apiMock.getLlmsTxt.mockReset().mockResolvedValue(CONTENT);
   apiMock.setMonitoring.mockReset();
   apiMock.getPages.mockReset().mockResolvedValue({
@@ -60,12 +68,12 @@ beforeEach(() => {
   });
 });
 
-it("renders the file, version, and hosted URL", async () => {
+it("renders the file, version history, and hosted URL", async () => {
   render(<ResultView siteId={site.id} />);
 
   expect(await screen.findByText("# Acme")).toBeInTheDocument();
-  expect(screen.getByText("Quickstart")).toBeInTheDocument(); // highlighted link label
-  expect(screen.getByText(/v3/)).toBeInTheDocument();
+  expect(screen.getByText(/\[Quickstart\]/)).toBeInTheDocument(); // highlighted link label
+  expect(screen.getByText("v3")).toBeInTheDocument();
   expect(apiMock.getLlmsTxt).toHaveBeenCalledWith("https://acme.dev");
   expect(
     screen.getByRole("link", {
@@ -83,7 +91,7 @@ it("toggles monitoring and shows the cadence", async () => {
   });
   render(<ResultView siteId={site.id} />);
 
-  const toggle = await screen.findByRole("switch", { name: "Keep this updated" });
+  const toggle = await screen.findByRole("switch", { name: "Toggle monitoring" });
   expect(toggle).toHaveAttribute("aria-checked", "false");
 
   fireEvent.click(toggle);
@@ -91,17 +99,18 @@ it("toggles monitoring and shows the cadence", async () => {
   await waitFor(() => {
     expect(apiMock.setMonitoring).toHaveBeenCalledWith(site.id, true);
   });
-  await waitFor(() => expect(toggle).toHaveAttribute("aria-checked", "true"));
-  expect(screen.getByText(/checking every 6 hours/i)).toBeInTheDocument();
+  await waitFor(() => {
+    expect(toggle).toHaveAttribute("aria-checked", "true");
+  });
+  expect(screen.getByText(/auto-refreshing every 6 hours/i)).toBeInTheDocument();
 });
 
-it("expands the page inventory table on demand", async () => {
+it("shows the page inventory on the pages tab", async () => {
   render(<ResultView siteId={site.id} />);
   await screen.findByText("# Acme");
 
-  fireEvent.click(screen.getByRole("button", { name: /page inventory/i }));
+  fireEvent.click(screen.getByRole("button", { name: "pages" }));
 
-  const table = await screen.findByRole("table");
-  expect(within(table).getByText("https://acme.dev/docs/quickstart")).toBeInTheDocument();
-  expect(within(table).getByText("ok")).toBeInTheDocument();
+  expect(await screen.findByText("/docs/quickstart")).toBeInTheDocument();
+  expect(screen.getByText("ok")).toBeInTheDocument();
 });

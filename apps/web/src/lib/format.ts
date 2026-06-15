@@ -24,28 +24,16 @@ export function toDate(epoch: number): Date {
 }
 
 /**
- * Formats a timestamp for compact date-only display.
+ * Compact relative-time label (e.g. "just now", "5m ago", "yesterday").
  * @param epoch Timestamp in epoch seconds or epoch milliseconds.
- * @returns Localized date label.
+ * @returns Short relative-time label.
  */
-export function formatDate(epoch: number): string {
-  return toDate(epoch).toLocaleDateString(undefined, {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
-}
-
-/**
- * Formats a timestamp for compact date and time display.
- * @param epoch Timestamp in epoch seconds or epoch milliseconds.
- * @returns Localized date-time label.
- */
-export function formatDateTime(epoch: number): string {
-  return toDate(epoch).toLocaleString(undefined, {
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
+export function formatRelative(epoch: number): string {
+  const diff = Date.now() - toDate(epoch).getTime();
+  const day = 86_400_000;
+  if (diff < 60_000) return "just now";
+  if (diff < 3_600_000) return `${String(Math.round(diff / 60_000))}m ago`;
+  if (diff < day) return `${String(Math.round(diff / 3_600_000))}h ago`;
+  const days = Math.round(diff / day);
+  return days === 1 ? "yesterday" : `${String(days)}d ago`;
 }

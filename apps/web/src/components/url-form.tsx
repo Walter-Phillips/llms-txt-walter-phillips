@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState, type JSX, type SyntheticEvent } from "react";
-import { Button } from "@/components/ui/button";
+import { Icons } from "@/components/icons";
 import { api, ApiRequestError, normalizeWebsiteUrl } from "@/lib/api";
 
 export const EXAMPLE_SITES = ["vercel.com", "stripe.com", "hono.dev"] as const;
@@ -10,7 +10,7 @@ export const EXAMPLE_SITES = ["vercel.com", "stripe.com", "hono.dev"] as const;
 function friendlySubmitError(err: unknown): string {
   if (err instanceof ApiRequestError) {
     if (err.message.startsWith("invalid_url")) {
-      return "That doesn't look like a website address. Try something like example.com.";
+      return "Enter a full website address, e.g. stripe.com";
     }
     if (err.status === 0) {
       return "Couldn't reach the API. Check that the Worker is running, then try again.";
@@ -20,13 +20,42 @@ function friendlySubmitError(err: unknown): string {
   return "Something went wrong submitting that URL. Please try again.";
 }
 
+function ExampleRow({
+  disabled,
+  onPick,
+}: {
+  disabled: boolean;
+  onPick: (site: string) => void;
+}): JSX.Element {
+  return (
+    <div className="examples">
+      <span className="examples-label">try</span>
+      <div className="examples-list">
+        {EXAMPLE_SITES.map((site) => (
+          <button
+            key={site}
+            type="button"
+            className="chip"
+            disabled={disabled}
+            onClick={() => {
+              onPick(site);
+            }}
+          >
+            {site}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export function UrlForm(): JSX.Element {
   const router = useRouter();
   const [url, setUrl] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function submit(target: string) {
+  async function submit(target: string): Promise<void> {
     if (!target.trim() || submitting) return;
     setSubmitting(true);
     setError(null);
@@ -45,57 +74,56 @@ export function UrlForm(): JSX.Element {
   }
 
   return (
-    <div>
-      <form onSubmit={onSubmit} className="plate flex items-stretch gap-0 p-1.5">
+    <form onSubmit={onSubmit} noValidate>
+      <div className={`urlform-field ${error ? "urlform-field-err" : ""}`}>
+        <span className="urlform-scheme">https://</span>
         <label htmlFor="site-url" className="sr-only">
           Website URL
         </label>
         <input
           id="site-url"
           name="url"
-          type="text"
-          inputMode="url"
-          autoComplete="off"
-          spellCheck={false}
-          placeholder="yourproduct.com"
+          className="urlform-input"
           value={url}
           onChange={(event) => {
             setUrl(event.target.value);
+            if (error) setError(null);
           }}
-          className="min-w-0 flex-1 bg-transparent px-3 text-base outline-none placeholder:text-ink-soft/60"
+          placeholder="your-site.com"
+          autoComplete="off"
+          autoCapitalize="off"
+          spellCheck={false}
+          aria-label="Website URL"
         />
-        <Button
+        <button
           type="submit"
+          className="btn btn-primary urlform-go"
           disabled={submitting || !url.trim()}
-          className="shrink-0 rounded-none bg-ink font-mono text-paper hover:bg-accent"
         >
-          {submitting ? "Pressing…" : "Generate"}
-        </Button>
-      </form>
-
-      {error ? (
-        <p role="alert" className="mt-3 border-l-2 border-accent pl-3 text-sm text-accent">
-          {error}
-        </p>
-      ) : null}
-
-      <div className="mt-4 flex flex-wrap items-baseline gap-2 text-xs text-ink-soft">
-        <span className="uppercase tracking-[0.2em]">try</span>
-        {EXAMPLE_SITES.map((site) => (
-          <button
-            key={site}
-            type="button"
-            disabled={submitting}
-            onClick={() => {
-              setUrl(site);
-              void submit(site);
-            }}
-            className="border border-rule bg-paper px-2.5 py-1 font-mono text-ink transition-colors hover:border-ink hover:text-accent disabled:opacity-50"
-          >
-            {site}
-          </button>
-        ))}
+          <span>{submitting ? "Generating…" : "Generate"}</span>
+          <Icons.arrow size={15} />
+        </button>
       </div>
-    </div>
+
+      <div className="urlform-meta">
+        {error ? (
+          <span className="urlform-error" role="alert">
+            {error}
+          </span>
+        ) : (
+          <span className="urlform-hint">
+            Sitemap-first crawl, validated against the spec, hosted at <code>/llms.txt</code>.
+          </span>
+        )}
+      </div>
+
+      <ExampleRow
+        disabled={submitting}
+        onPick={(site) => {
+          setUrl(site);
+          void submit(site);
+        }}
+      />
+    </form>
   );
 }

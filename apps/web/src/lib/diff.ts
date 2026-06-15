@@ -47,3 +47,22 @@ export function unifiedDiff(a: string, b: string, fromLabel: string, toLabel: st
     ...body,
   ].join("\n");
 }
+
+/**
+ * Reconstructs the "from" side of a unified diff. Context (" ") and deletion
+ * ("-") lines together make up the original file, so an older version's exact
+ * content can be rebuilt client-side from a diff against the latest version —
+ * no per-version content endpoint required.
+ * @param diff Unified diff text produced for the from→to version pair.
+ * @returns The original ("from") file contents.
+ */
+export function reconstructFromDiff(diff: string): string {
+  const out: string[] = [];
+  for (const line of diff.split("\n")) {
+    if (line.startsWith("---") || line.startsWith("+++") || line.startsWith("@@")) continue;
+    if (line.startsWith("+")) continue;
+    // Context (" ") and deletions ("-") belong to the original file.
+    if (line.startsWith(" ") || line.startsWith("-")) out.push(line.slice(1));
+  }
+  return out.join("\n");
+}

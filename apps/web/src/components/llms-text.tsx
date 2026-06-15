@@ -1,49 +1,53 @@
 /**
- * Renders llms.txt content in monospace with light markdown highlighting:
- * headings bold, blockquote italic, link labels accented. Pure and testable.
+ * Renders llms.txt content as a line-numbered, syntax-highlighted code view.
+ * Headings, blockquotes, and markdown links are tokenized for the dark theme.
+ * Pure and testable.
  */
 import type { ReactElement, ReactNode } from "react";
 
-const LINK_RE = /\[([^\]]+)\]\(([^)]+)\)/g;
+const LINK_LINE_RE = /^(\s*-\s)\[([^\]]+)\]\(([^)]+)\)(:?)(.*)$/;
 
-function renderInline(line: string, key: number): ReactNode {
-  const parts: ReactNode[] = [];
-  let last = 0;
-  let match: RegExpExecArray | null;
-  LINK_RE.lastIndex = 0;
-  while ((match = LINK_RE.exec(line)) !== null) {
-    if (match.index > last) parts.push(line.slice(last, match.index));
-    parts.push(
-      <span key={`${String(key)}-${String(match.index)}`}>
-        [<span className="text-accent">{match[1]}</span>](
-        <span className="text-ink-soft">{match[2]}</span>)
-      </span>,
+function highlightLine(line: string): ReactNode {
+  if (/^#\s/.test(line)) return <span className="tok-h1">{line}</span>;
+  if (/^##\s/.test(line)) return <span className="tok-h2">{line}</span>;
+  if (/^>\s?/.test(line)) return <span className="tok-quote">{line}</span>;
+
+  const match = LINK_LINE_RE.exec(line);
+  if (match) {
+    return (
+      <>
+        <span className="tok-bullet">{match[1]}</span>
+        <span className="tok-link">[{match[2]}]</span>
+        <span className="tok-url">({match[3]})</span>
+        <span className="tok-colon">{match[4]}</span>
+        <span className="tok-desc">{match[5]}</span>
+      </>
     );
-    last = match.index + match[0].length;
   }
-  if (last < line.length) parts.push(line.slice(last));
-  return parts.length ? parts : line;
-}
 
-function lineClassName(line: string): string {
-  if (/^#\s/.test(line)) return "font-semibold text-lg";
-  if (/^##\s/.test(line)) return "font-semibold";
-  if (/^>\s?/.test(line)) return "italic text-ink-soft";
-  return "";
+  if (/^\s*-\s/.test(line)) {
+    const idx = line.indexOf("- ") + 2;
+    return (
+      <>
+        <span className="tok-bullet">{line.slice(0, idx)}</span>
+        {line.slice(idx)}
+      </>
+    );
+  }
+
+  return <span className="tok-text">{line}</span>;
 }
 
 export function LlmsText({ content }: { content: string }): ReactElement {
   const lines = content.replace(/\n$/, "").split("\n");
   return (
-    <pre className="overflow-x-auto whitespace-pre-wrap font-mono text-[13px] leading-6">
-      {lines.map((line, i) => {
-        return (
-          <div key={i} className={lineClassName(line)}>
-            {renderInline(line, i)}
-            {line === "" ? " " : null}
-          </div>
-        );
-      })}
-    </pre>
+    <div className="code">
+      {lines.map((line, i) => (
+        <div className="code-row" key={i}>
+          <span className="code-ln">{i + 1}</span>
+          <span className="code-line">{line === "" ? " " : highlightLine(line)}</span>
+        </div>
+      ))}
+    </div>
   );
 }

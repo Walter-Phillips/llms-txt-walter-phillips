@@ -1,79 +1,32 @@
-"use client";
-
 import type { PageInventoryItem } from "@profound-takehome/shared";
-import { useEffect, useState, type JSX } from "react";
-import { api } from "@/lib/api";
+import type { JSX } from "react";
 
-function statusTone(status: string): string {
-  if (status === "ok") return "text-moss";
-  if (status === "skipped" || status === "excluded") return "text-ink-soft";
-  return "text-accent";
+function pathOf(url: string): string {
+  return url.replace(/^https?:\/\/[^/]+/, "") || "/";
 }
 
-export function PageInventory({ siteId }: { siteId: string }): JSX.Element {
-  const [open, setOpen] = useState(false);
-  const [pages, setPages] = useState<PageInventoryItem[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!open || pages) return;
-    let cancelled = false;
-    api
-      .getPages(siteId)
-      .then((res) => {
-        if (!cancelled) setPages(res.pages);
-      })
-      .catch(() => {
-        if (!cancelled) setError("Couldn't load the page inventory.");
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [open, pages, siteId]);
-
+export function PageInventory({ pages }: { pages: PageInventoryItem[] }): JSX.Element {
   return (
-    <section className="border-t border-rule">
-      <button
-        type="button"
-        onClick={() => {
-          setOpen((v) => !v);
-        }}
-        aria-expanded={open}
-        className="flex w-full items-baseline justify-between py-3 text-left text-xs uppercase tracking-[0.2em] text-ink-soft hover:text-accent"
-      >
-        <span>Page inventory{pages ? ` · ${String(pages.length)}` : ""}</span>
-        <span aria-hidden>{open ? "−" : "+"}</span>
-      </button>
-      {open ? (
-        error ? (
-          <p className="pb-4 text-sm text-accent">{error}</p>
-        ) : !pages ? (
-          <p className="pb-4 text-sm text-ink-soft">Loading inventory…</p>
-        ) : (
-          <div className="overflow-x-auto pb-4">
-            <table className="w-full text-left text-xs">
-              <thead>
-                <tr className="border-b border-rule text-ink-soft">
-                  <th className="py-2 pr-4 font-medium uppercase tracking-wider">URL</th>
-                  <th className="py-2 pr-4 font-medium uppercase tracking-wider">Title</th>
-                  <th className="py-2 pr-4 font-medium uppercase tracking-wider">Section</th>
-                  <th className="py-2 font-medium uppercase tracking-wider">Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {pages.map((page) => (
-                  <tr key={page.url} className="border-b border-rule/60 align-baseline">
-                    <td className="max-w-[260px] truncate py-2 pr-4 text-ink-soft">{page.url}</td>
-                    <td className="py-2 pr-4">{page.title ?? "—"}</td>
-                    <td className="py-2 pr-4 text-ink-soft">{page.sectionHint ?? "—"}</td>
-                    <td className={`py-2 ${statusTone(page.status)}`}>{page.status}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )
-      ) : null}
-    </section>
+    <div className="inv">
+      <div className="inv-table">
+        <div className="inv-row inv-head">
+          <span>path</span>
+          <span>title</span>
+          <span>status</span>
+        </div>
+        {pages.map((page) => {
+          const muted = page.status !== "ok";
+          return (
+            <div className={`inv-row ${muted ? "inv-row-mute" : ""}`} key={page.url}>
+              <span className="inv-path">{pathOf(page.url)}</span>
+              <span className="inv-title">
+                {page.title ?? <em className="mono-dim">no title</em>}
+              </span>
+              <span className={`inv-status ${muted ? "inv-status-mute" : ""}`}>{page.status}</span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
   );
 }

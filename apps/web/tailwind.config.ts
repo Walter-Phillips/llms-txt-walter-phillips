@@ -5,27 +5,38 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        paper: {
-          DEFAULT: "hsl(var(--paper))",
-          deep: "hsl(var(--paper-deep))",
+        bg: {
+          DEFAULT: "var(--bg)",
+          1: "var(--bg-1)",
+          2: "var(--bg-2)",
+          3: "var(--bg-3)",
+          hover: "var(--bg-hover)",
         },
-        ink: {
-          DEFAULT: "hsl(var(--ink))",
-          soft: "hsl(var(--ink-soft))",
+        line: {
+          DEFAULT: "var(--line)",
+          2: "var(--line-2)",
+          3: "var(--line-3)",
         },
-        rule: "hsl(var(--rule))",
-        accent: "hsl(var(--accent))",
-        moss: "hsl(var(--moss))",
-        border: "hsl(var(--border))",
-        background: "hsl(var(--background))",
-        foreground: "hsl(var(--foreground))",
+        text: {
+          DEFAULT: "var(--text)",
+          2: "var(--text-2)",
+        },
+        muted: "var(--muted)",
+        dim: "var(--dim)",
+        faint: "var(--faint)",
+        white: "var(--white)",
+        accent: "var(--accent)",
+        // Legacy tokens kept for the shared button primitive and any untouched bits.
+        border: "var(--line)",
+        background: "var(--bg)",
+        foreground: "var(--text)",
         primary: {
-          DEFAULT: "hsl(var(--primary))",
-          foreground: "hsl(var(--primary-foreground))",
+          DEFAULT: "var(--white)",
+          foreground: "#0a0a0a",
         },
       },
       fontFamily: {
-        display: ["var(--font-display)", "Georgia", "serif"],
+        sans: ["var(--font-sans)", "-apple-system", "system-ui", "sans-serif"],
         mono: ["var(--font-mono)", "ui-monospace", "Menlo", "monospace"],
       },
     },

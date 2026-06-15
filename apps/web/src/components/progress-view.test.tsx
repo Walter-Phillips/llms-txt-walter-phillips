@@ -56,9 +56,11 @@ it("shows crawl progress with page counts and discovery method", async () => {
   getJobMock.mockResolvedValue(crawlingStatus());
   render(<ProgressView runId="run_1" domain="acme.dev" onDone={vi.fn()} pollIntervalMs={5} />);
 
-  expect(await screen.findByText("23/80 pages")).toBeInTheDocument();
-  expect(screen.getByText("Found sitemap")).toBeInTheDocument();
-  expect(screen.getByText("Crawling")).toBeInTheDocument();
+  // Crawl gauge: 23 of 80 pages.
+  expect(await screen.findByText("23")).toBeInTheDocument();
+  expect(screen.getByText("/ 80")).toBeInTheDocument();
+  expect(screen.getByText("via sitemap")).toBeInTheDocument();
+  expect(screen.getByText("Crawl")).toBeInTheDocument();
 });
 
 it("indicates link-crawl fallback when there is no sitemap", async () => {
@@ -71,7 +73,7 @@ it("indicates link-crawl fallback when there is no sitemap", async () => {
   getJobMock.mockResolvedValue(status);
   render(<ProgressView runId="run_1" onDone={vi.fn()} pollIntervalMs={5} />);
 
-  expect(await screen.findByText("No sitemap — crawling links")).toBeInTheDocument();
+  expect(await screen.findByText("via links")).toBeInTheDocument();
 });
 
 it("advances through generating to done and notifies the caller", async () => {
@@ -101,7 +103,7 @@ it("advances through generating to done and notifies the caller", async () => {
   await waitFor(() => {
     expect(onDone).toHaveBeenCalled();
   });
-  expect(screen.getByText("file pressed")).toBeInTheDocument();
+  expect(screen.getByText("Publish")).toBeInTheDocument();
 });
 
 it("renders a friendly, specific error state when the run fails", async () => {
@@ -112,5 +114,5 @@ it("renders a friendly, specific error state when the run fails", async () => {
 
   const alert = await screen.findByRole("alert");
   expect(alert).toHaveTextContent(/couldn't reach that site/i);
-  expect(screen.getByText("← Try another URL")).toBeInTheDocument();
+  expect(screen.getByText("Try another URL")).toBeInTheDocument();
 });

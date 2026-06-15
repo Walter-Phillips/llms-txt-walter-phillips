@@ -1,14 +1,16 @@
 "use client";
 
 import { useEffect, useRef, useState, type JSX } from "react";
-import { Button } from "@/components/ui/button";
+import { Icons } from "@/components/icons";
 
 export function CopyButton({
   text,
   label = "Copy",
+  className = "",
 }: {
   text: string;
   label?: string;
+  className?: string;
 }): JSX.Element {
   const [copied, setCopied] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -34,15 +36,15 @@ export function CopyButton({
   }
 
   return (
-    <Button
+    <button
       type="button"
-      variant="outline"
-      className="rounded-none border-rule bg-paper font-mono text-xs uppercase tracking-wider hover:border-ink"
+      className={`btn btn-ghost ${className}`}
       onClick={() => {
         void copyText();
       }}
     >
-      {copied ? "Copied ✓" : label}
-    </Button>
+      {copied ? <Icons.check size={14} /> : <Icons.copy size={14} />}
+      <span>{copied ? "Copied" : label}</span>
+    </button>
   );
 }

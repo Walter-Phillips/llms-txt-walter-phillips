@@ -33,8 +33,8 @@ function submitUrl(value: string) {
 
 it("renders the hero, explainer, and example chips", () => {
   render(<Home />);
-  expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(/plain text/i);
-  expect(screen.getByText(/proposed standard/i)).toBeInTheDocument();
+  expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(/make your website legible/i);
+  expect(screen.getByText(/the file LLMs read to understand your site/i)).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "vercel.com" })).toBeInTheDocument();
   expect(screen.getByLabelText("Website URL")).toBeInTheDocument();
 });
@@ -58,7 +58,7 @@ it("shows a friendly error when the URL is rejected", async () => {
 
   submitUrl("not a url");
 
-  expect(await screen.findByRole("alert")).toHaveTextContent(/doesn't look like a website/i);
+  expect(await screen.findByRole("alert")).toHaveTextContent(/enter a full website address/i);
   expect(pushMock).not.toHaveBeenCalled();
 });
 
